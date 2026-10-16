@@ -251,35 +251,16 @@ async function runCode() {
         })
       );
 
-     
-let code = files[activeFile];
+      let code = files[activeFile];
 
-// Automatically load available Pyodide packages
-// required by the user's Python imports.
-try {
-  await py.loadPackagesFromImports(code);
-} catch (err) {
-  appendTerminalText(
-    "Package loading error: " + err.message,
-    "stderr"
-  );
-  return;
-}
+      // Initial support for simple input() calls.
+      code = code.replace(
+        /\binput\s*\(/g,
+        "await __vszkb_input("
+      );
 
-// Initial support for simple input() calls.
-code = code.replace(
-  /\binput\s*\(/g,
-  "await __vszkb_input("
-);
-
-try {
-  await py.runPythonAsync(code);
-} catch (err) {
-  appendTerminalText(String(err), "stderr");
-} finally {
-  py.globals.delete("__vszkb_input");
-}
-
+      try {
+        await py.runPythonAsync(code);
       } catch (err) {
         appendTerminalText(String(err), "stderr");
       } finally {

@@ -133,39 +133,168 @@
     const node = document.createElement("div"); node.className = type; node.textContent = text || (type === "stderr" ? "" : "(No output)");
     out.appendChild(node);
   }
+  function appendTerminalText(text, type = "stdout") {
+  const out = $("outputView");
+  const node = document.createElement("div");
+  node.className = type;
+  node.textContent = text;
+  out.appendChild(node);
+  out.scrollTop = out.scrollHeight;
+}
+
+function readTerminalInput(promptText = "") {
+  return new Promise((resolve) => {
+    const out = $("outputView");
+
+    if (promptText) {
+      const promptLine = document.createElement("span");
+      promptLine.textContent = promptText;
+      out.appendChild(promptLine);
+    }
+
+    const line = document.createElement("div");
+    line.style.display = "flex";
+    line.style.gap = "8px";
+    line.style.alignItems = "center";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.setAttribute("aria-label", "Python terminal input");
+    input.style.flex = "1";
+    input.style.minWidth = "0";
+    input.style.background = "#111827";
+    input.style.color = "#ffffff";
+    input.style.border = "1px solid #64748b";
+    input.style.padding = "8px";
+    input.style.font = "inherit";
+
+    line.appendChild(input);
+    out.appendChild(line);
+    out.scrollTop = out.scrollHeight;
+
+    input.focus();
+
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+
+      event.preventDefault();
+
+      const answer = input.value;
+      const answerText = document.createElement("span");
+      answerText.textContent = answer;
+
+      line.replaceChildren(answerText);
+      resolve(answer);
+    });
+  });
+}
   function showPanel(which) {
     $("outputView").classList.toggle("hidden", which !== "output");
     $("previewView").classList.toggle("hidden", which !== "preview");
     document.querySelectorAll(".panel-tab").forEach(b => b.classList.toggle("active", b.dataset.panel === which));
   }
-  async function runCode() {
-    if (!activeFile) return;
-    files[activeFile] = currentCode(); scheduleSave();
-    const language = languageFor(activeFile);
-    if (language === "python") {
-      showPanel("output"); setOutput("Starting browser-based Python… (first run may take a little while)");
-      $("runBtn").disabled = true; $("runBtn").textContent = "Running…";
+ 
+async function runCode() {
+  if (!activeFile) return;
+
+  files[activeFile] = currentCode();
+  scheduleSave();
+
+  const language = languageFor(activeFile);
+
+  if (language === "python") {
+    showPanel("output");
+    setOutput("Starting browser-based Python… (first run may take a little while)");
+
+    $("runBtn").disabled = true;
+    $("runBtn").textContent = "Running…";
+
+    try {
+      if (!window.loadPyodide) {
+        throw new Error(
+          "Python runtime did not load. Check your internet connection and reload."
+        );
+      }
+
+      if (!window.vszkbPyodide) {
+        window.vszkbPyodide = await loadPyodide();
+      }
+
+      const py = window.vszkbPyodide;
+
+      // Clear previous output and errors.
+      window.vszkbStdout = "";
+      window.vszkbStderr = "";
+
+      // Send Python output directly to the terminal.
+      py.setStdout({
+        batched: (text) => {
+          appendTerminalText(text + "\n");
+        }
+      });
+
+      py.setStderr({
+        batched: (text) => {
+          appendTerminalText(text + "\n", "stderr");
+        }
+      });
+
+      // Provide input() through the terminal.
+      py.globals.set(
+        "__vszkb_input",
+        py.toPy(async (promptText) => {
+          return await readTerminalInput(
+            String(promptText ?? "")
+          );
+        })
+      );
+
+      let code = files[activeFile];
+
+      // Initial support for simple input() calls.
+      code = code.replace(
+        /\binput\s*\(/g,
+        "await __vszkb_input("
+      );
+
       try {
-        if (!window.loadPyodide) throw new Error("Python runtime did not load. Check your internet connection and reload.");
-        if (!window.vszkbPyodide) window.vszkbPyodide = await loadPyodide();
-        const py = window.vszkbPyodide;
-        py.setStdout({batched: (s) => { window.vszkbStdout = (window.vszkbStdout || "") + s + "\n"; }});
-        py.setStderr({batched: (s) => { window.vszkbStderr = (window.vszkbStderr || "") + s + "\n"; }});
-        window.vszkbStdout = ""; window.vszkbStderr = "";
-        try { await py.runPythonAsync(files[activeFile]); }
-        catch (err) { window.vszkbStderr += String(err); }
-        const output = (window.vszkbStdout || "") + (window.vszkbStderr ? ((window.vszkbStdout ? "\n" : "") + window.vszkbStderr) : "");
-        setOutput(output.trimEnd() || "Program finished successfully (no output).", window.vszkbStderr ? "stderr" : "stdout");
-      } catch (err) { setOutput("Could not run Python: " + err.message, "stderr"); }
-      finally { $("runBtn").disabled = false; $("runBtn").innerHTML = "<span>▶</span> Run"; }
-    } else if (["html","css","javascript"].includes(language) || activeFile === "index.html") {
-      const html = buildPreview();
-      $("previewFrame").srcdoc = html;
-      showPanel("preview");
-    } else {
-      showPanel("output"); setOutput(`Run is not configured for .${ext(activeFile)} files yet. Supported: .py, .html, .css, .js`, "stderr");
+        await py.runPythonAsync(code);
+      } catch (err) {
+        appendTerminalText(String(err), "stderr");
+      } finally {
+        py.globals.delete("__vszkb_input");
+      }
+
+    } catch (err) {
+      appendTerminalText(
+        "Could not run Python: " + err.message,
+        "stderr"
+      );
+    } finally {
+      $("runBtn").disabled = false;
+      $("runBtn").innerHTML = "<span>▶</span> Run";
     }
+
+  } else if (
+    ["html", "css", "javascript"].includes(language) ||
+    activeFile === "index.html"
+  ) {
+    const html = buildPreview();
+    $("previewFrame").srcdoc = html;
+    showPanel("preview");
+
+  } else {
+    showPanel("output");
+
+    setOutput(
+      `Run is not configured for .${ext(activeFile)} files yet. Supported: .py, .html, .css, .js`,
+      "stderr"
+    );
   }
+}
+
   function buildPreview() {
     let htmlName = Object.keys(files).find(n => ext(n) === "html" || ext(n) === "htm");
     let html = htmlName ? files[htmlName] : '<!doctype html><html><head><meta charset="utf-8"></head><body><h1>Preview</h1></body></html>';

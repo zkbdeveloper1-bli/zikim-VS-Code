@@ -1,66 +1,185 @@
+
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <title>VS-ZKB Code Studio</title>
+
   <link rel="stylesheet" href="./static/style.css">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
 </head>
+
 <body>
   <div class="app-shell">
+
+    <!-- TOP HEADER -->
     <header class="topbar">
-      <div class="brand"><span class="brand-mark">Z</span><span>VS-ZKB <b>Code Studio</b></span></div>
-      <div class="top-actions">
-        <span class="save-status" id="saveStatus">All changes saved locally</span>
-        <button class="btn secondary" id="downloadBtn" title="Download current file">Download file</button>
-        <button class="btn primary" id="runBtn"><span>▶</span> Run</button>
+
+      <div class="brand">
+        <img
+          class="brand-logo"
+          src="./static/zikim-logo.png"
+          alt="ZIKIM Logo"
+        >
       </div>
+
+      <div class="top-actions">
+        <span class="save-status" id="saveStatus">
+          All changes saved locally
+        </span>
+
+        <button
+          class="btn secondary"
+          id="downloadBtn"
+          title="Download current file"
+        >
+          Download file
+        </button>
+
+        <button class="btn primary" id="runBtn">
+          <span>▶</span> Run
+        </button>
+      </div>
+
     </header>
 
+    <!-- MAIN WORKSPACE -->
     <div class="workspace">
+
+      <!-- ACTIVITY BAR -->
       <aside class="activitybar" aria-label="Activity bar">
         <button class="activity active" title="Explorer">▤</button>
         <button class="activity" id="searchFocus" title="Search in files">⌕</button>
+
         <div class="activity-spacer"></div>
+
         <button class="activity" id="themeBtn" title="Toggle theme">◐</button>
       </aside>
 
+      <!-- SIDEBAR -->
       <aside class="sidebar">
-        <div class="side-heading"><span>EXPLORER</span><div class="side-tools"><button id="newFileBtn" title="New file">＋</button><button id="newFolderBtn" title="New folder">▱</button></div></div>
-        <div class="project-title"><span>⌄</span> ZKB-PROJECT</div>
-        <div id="fileTree" class="file-tree"></div>
-        <div class="sidebar-bottom">
-          <div class="side-heading"><span>GETTING STARTED</span></div>
-          <p class="hint">Choose a file, edit your code, then press <b>Run</b>.</p>
-          <p class="hint">Your project is saved in this browser on this device.</p>
+
+        <div class="side-heading">
+          <span>EXPLORER</span>
+
+          <div class="side-tools">
+            <button id="newFileBtn" title="New file">＋</button>
+            <button id="newFolderBtn" title="New folder">▱</button>
+          </div>
         </div>
+
+        <div class="project-title">
+          <span>⌄</span> ZKB-PROJECT
+        </div>
+
+        <div id="fileTree" class="file-tree"></div>
+
+        <div class="sidebar-bottom">
+          <div class="side-heading">
+            <span>GETTING STARTED</span>
+          </div>
+
+          <p class="hint">
+            Choose a file, edit your code, then press <b>Run</b>.
+          </p>
+
+          <p class="hint">
+            Your project is saved in this browser on this device.
+          </p>
+        </div>
+
       </aside>
 
+      <!-- EDITOR AREA -->
       <main class="main-area">
+
         <div id="tabs" class="tabs"></div>
-        <div class="breadcrumbs" id="breadcrumbs">welcome.py</div>
-        <div id="editor" class="editor"></div>
-        <div id="fallbackEditor" class="fallback-editor hidden">
-          <div class="fallback-note">The online editor library did not load. Check your internet connection and reload this page.</div>
-          <textarea id="plainEditor" spellcheck="false" aria-label="Code editor"></textarea>
+
+        <div class="breadcrumbs" id="breadcrumbs">
+          welcome.py
         </div>
-        <section class="panel">
-          <div class="panel-head">
-            <div class="panel-tabs"><button class="panel-tab active" data-panel="output">OUTPUT</button><button class="panel-tab" data-panel="preview">PREVIEW</button></div>
-            <div class="panel-actions"><button id="clearOutputBtn">Clear</button><button id="togglePanelBtn" title="Hide/show panel">⌄</button></div>
+
+        <div id="editor" class="editor"></div>
+
+        <div id="fallbackEditor" class="fallback-editor hidden">
+          <div class="fallback-note">
+            The online editor library did not load.
+            Check your internet connection and reload this page.
           </div>
-          <div id="outputView" class="output-view"><div class="empty-output">▶ Run your code to see output here.</div></div>
-          <div id="previewView" class="preview-view hidden"><iframe id="previewFrame" title="Live website preview" sandbox="allow-scripts"></iframe></div>
+
+          <textarea
+            id="plainEditor"
+            spellcheck="false"
+            aria-label="Code editor"
+          ></textarea>
+        </div>
+
+        <!-- OUTPUT PANEL -->
+        <section class="panel">
+
+          <div class="panel-head">
+
+            <div class="panel-tabs">
+              <button class="panel-tab active" data-panel="output">
+                OUTPUT
+              </button>
+
+              <button class="panel-tab" data-panel="preview">
+                PREVIEW
+              </button>
+            </div>
+
+            <div class="panel-actions">
+              <button id="clearOutputBtn">Clear</button>
+              <button id="togglePanelBtn" title="Hide/show panel">⌄</button>
+            </div>
+
+          </div>
+
+          <div id="outputView" class="output-view">
+            <div class="empty-output">
+              ▶ Run your code to see output here.
+            </div>
+          </div>
+
+          <div id="previewView" class="preview-view hidden">
+            <iframe
+              id="previewFrame"
+              title="Live website preview"
+              sandbox="allow-scripts"
+            ></iframe>
+          </div>
+
         </section>
-        <footer class="statusbar"><span id="languageStatus">Python</span><span id="cursorStatus">Ln 1, Col 1</span><span>UTF-8</span><span>VS-ZKB Code Studio</span></footer>
+
+        <!-- STATUS BAR -->
+        <footer class="statusbar">
+          <span id="languageStatus">Python</span>
+          <span id="cursorStatus">Ln 1, Col 1</span>
+          <span>UTF-8</span>
+          <span>VS-ZKB Code Studio</span>
+        </footer>
+
       </main>
     </div>
   </div>
+
+  <!-- PYTHON RUNTIME -->
   <script src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js"></script>
+
+  <!-- APPLICATION SCRIPT -->
   <script src="./static/app.js"></script>
+
 </body>
 </html>

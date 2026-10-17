@@ -252,7 +252,9 @@ async function runCode() {
       );
 
       let code = files[activeFile];
+      appendTerminalText("Checking Python libraries...");
 
+      await py.loadPackagesFromImports(code);
       // Initial support for simple input() calls.
       code = code.replace(
         /\binput\s*\(/g,

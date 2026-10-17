@@ -56,6 +56,7 @@
         <div class="panel-tabs">
           <button class="panel-tab active" data-panel="term">TERMINAL</button>
           <button class="panel-tab" data-panel="problems">PROBLEMS <span id="probCount" class="badge">0</span></button>
+          <button class="panel-tab" data-panel="output">OUTPUT</button>
         </div>
         <div class="panel-actions">
           <button id="clearBtn" type="button">Clear</button>
@@ -64,12 +65,9 @@
       </div>
       <div id="termView" class="view">
         <div id="termOut" class="term-out"><div class="dim">▶ Run your code to see output here.</div></div>
-        <div class="term-in">
-          <span id="termPrompt">›</span>
-          <input id="termInput" autocomplete="off" spellcheck="false" placeholder="Type here when your program asks for input, then press Enter">
-        </div>
       </div>
       <div id="problemsView" class="view hidden"></div>
+      <div id="outputView" class="view hidden"><iframe id="outFrame" title="Output preview" sandbox="allow-scripts"></iframe></div>
     </section>
 
     <div class="ad-slot"><span class="ad-label">ADVERTISEMENT</span><span class="ad-placeholder">Ad space</span></div>
@@ -83,11 +81,6 @@
   </main>
 </div>
 
-<!-- Separate window for graphics / website preview -->
-<div id="floatWin" class="float hidden">
-  <div id="floatBar" class="float-bar"><span id="floatTitle">Preview</span><button id="floatClose" type="button">✕</button></div>
-  <iframe id="floatFrame" title="Preview window" sandbox="allow-scripts"></iframe>
-</div>
 
 <script src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js"></script>
 <script src="./static/app.js"></script>

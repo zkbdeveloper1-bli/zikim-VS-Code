@@ -52,9 +52,6 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px 
 .term-out{flex:1;overflow:auto;padding:8px 12px;white-space:pre-wrap}
 .term-out .err{color:var(--err)}
 .dim{color:var(--muted);padding:8px 12px}
-.term-in{display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid var(--line);background:var(--panel)}
-.term-in input{flex:1;min-width:0;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:4px;padding:6px 8px;font:inherit}
-.term-in input:focus{border-color:var(--accent);outline:none}
 .prob{padding:6px 12px;cursor:pointer;border-bottom:1px solid var(--line)}
 .prob:hover{background:var(--hover)}
 .prob.err{color:var(--err)}.prob.warn{color:var(--warn)}
@@ -66,12 +63,14 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px 
 .statusbar{display:flex;gap:18px;padding:3px 12px;background:var(--accent);color:#fff;font-size:11px}
 
 /* separate window (graphics / preview) */
-.float{position:fixed;top:90px;right:30px;width:480px;height:360px;min-width:240px;min-height:160px;z-index:500;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 18px 60px #0008;resize:both;overflow:hidden}
-.float-bar{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--panel);color:var(--text);cursor:move;user-select:none;touch-action:none}
-.float-bar button{background:none;border:0;color:var(--text);cursor:pointer;font-size:14px}
-.float iframe{flex:1;border:0;width:100%;background:#fff}
 
 @media (max-width:760px){
-  .float{left:8px;right:8px;width:auto}
   .save-status{display:none}
 }
+
+/* inline terminal input + output tab */
+.inline-line{display:flex;align-items:center;white-space:pre}
+.inline-input{flex:1;min-width:0;margin-left:6px;background:transparent;color:var(--text);border:0;outline:0;font:inherit;caret-color:var(--text)}
+#outputView{display:flex}
+#outputView iframe{flex:1;border:0;background:#fff}
+.panel.big{height:48vh}

@@ -105,21 +105,23 @@
   }
   function readInput(p) {
     return new Promise((resolve) => {
-      pending = {resolve, p: String(p ?? "")};
-      $("termPrompt").textContent = pending.p || "›";
       showPanel("term");
-      $("termInput").focus();
+      const out = $("termOut");
+      const line = document.createElement("div"); line.className = "inline-line";
+      const pr = document.createElement("span"); pr.textContent = String(p ?? "");
+      const inp = document.createElement("input");
+      inp.className = "inline-input"; inp.autocomplete = "off"; inp.spellcheck = false;
+      line.append(pr, inp); out.appendChild(line); out.scrollTop = 1e9; inp.focus();
+      inp.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        const v = inp.value, t = document.createElement("span");
+        t.textContent = v; inp.replaceWith(t); resolve(v);
+      });
     });
   }
-  $("termInput").addEventListener("keydown", (e) => {
-    if (e.key !== "Enter") return;
-    e.preventDefault();
-    const v = e.target.value; e.target.value = "";
-    if (pending) {
-      const q = pending; pending = null;
-      $("termPrompt").textContent = "›";
-      term(q.p + v); q.resolve(v);
-    } else term("› " + v + "   (no program is waiting for input)", "dim");
+  $("termOut").addEventListener("click", () => {
+    const i = $("termOut").querySelector(".inline-input"); if (i) i.focus();
   });
 
   /* ---------- Problems ---------- */
@@ -142,37 +144,16 @@
   function showPanel(which) {
     $("panel").classList.remove("hidden");
     $("setPanel").textContent = "Hide Terminal";
-    $("termView").classList.toggle("hidden", which !== "term");
-    $("problemsView").classList.toggle("hidden", which !== "problems");
+    $("panel").classList.toggle("big", which === "output");
+    ["term", "problems", "output"].forEach(v => $(v + "View").classList.toggle("hidden", v !== which));
     document.querySelectorAll(".panel-tab").forEach(b => b.classList.toggle("active", b.dataset.panel === which));
   }
   document.querySelectorAll(".panel-tab").forEach(b => b.onclick = () => showPanel(b.dataset.panel));
   $("clearBtn").onclick = () => { $("termOut").innerHTML = ""; rt = []; renderProblems(); };
   $("hidePanelBtn").onclick = togglePanel;
 
-  /* ---------- Separate window (graphics / preview) ---------- */
-  function openFloat(title, html) {
-    $("floatTitle").textContent = title;
-    $("floatFrame").srcdoc = html;
-    $("floatWin").classList.remove("hidden");
-  }
-  $("floatClose").onclick = () => $("floatWin").classList.add("hidden");
-  (() => {
-    const bar = $("floatBar"), win = $("floatWin"); let d = null;
-    bar.onpointerdown = (e) => {
-      if (e.target.tagName === "BUTTON") return;
-      const r = win.getBoundingClientRect();
-      d = {x: e.clientX - r.left, y: e.clientY - r.top};
-      bar.setPointerCapture(e.pointerId);
-    };
-    bar.onpointermove = (e) => {
-      if (!d) return;
-      win.style.left = Math.max(0, e.clientX - d.x) + "px";
-      win.style.top = Math.max(0, e.clientY - d.y) + "px";
-      win.style.right = "auto";
-    };
-    bar.onpointerup = () => { d = null; };
-  })();
+  /* ---------- Output tab (graphics / preview) ---------- */
+  function openOutput(html) { $("outFrame").srcdoc = html; showPanel("output"); }
 
   function buildPreview() {
     const name = ext(active) === "html" || ext(active) === "htm" ? active
@@ -195,7 +176,7 @@
         '    o.append(base64.b64encode(b.getvalue()).decode())\n' +
         'plt.close("all")\no'
       ).toJs();
-      if (imgs.length) openFloat("Graphics",
+      if (imgs.length) openOutput(
         '<body style="margin:0;background:#fff;text-align:center">' +
         imgs.map(i => `<img style="max-width:100%" src="data:image/png;base64,${i}">`).join("") + "</body>");
     } catch {}
@@ -229,7 +210,6 @@
         rt.push({sev: 8, line: ln ? +ln[1] : 1, msg: m.split("\n").pop(), file: active});
         renderProblems();
       } finally {
-        pending = null; $("termPrompt").textContent = "›";
         py.globals.delete("__vszkb_input");
       }
       if (/matplotlib/.test(code)) await showFigures(py);
@@ -244,7 +224,7 @@
     files[active] = getCode(); sched();
     const l = lang(active);
     if (l === "python") runPython(files[active]);
-    else if (["html", "css", "javascript"].includes(l)) openFloat("Website Preview", buildPreview());
+    else if (["html", "css", "javascript"].includes(l)) openOutput(buildPreview());
     else {
       showPanel("term");
       term(`Run is not configured for .${ext(active)} files yet. Supported: .py, .html, .css, .js`, "err");
@@ -297,6 +277,51 @@
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); runCode(); }
   });
 
+  /* ---------- Python autocomplete ---------- */
+  function setupPython() {
+    const W = (x) => x.split(" ");
+    const mods = W("abc argparse array ast asyncio base64 bisect calendar cmath collections colorsys copy csv dataclasses datetime decimal difflib enum fractions functools hashlib heapq html io itertools json keyword logging math matplotlib numpy operator os pandas pathlib pickle pprint queue random re scipy secrets shutil statistics string struct sys tempfile textwrap threading time timeit traceback types typing unittest urllib uuid warnings zlib");
+    const kw = W("False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield");
+    const bi = W("abs all any bin bool chr dict dir enumerate filter float format input int isinstance len list map max min open ord pow print range repr reversed round set sorted str sum tuple type zip");
+    const subs = {matplotlib: W("pyplot cm colors patches animation"), os: W("path"), numpy: W("random linalg")};
+    const mem = {
+      plt: W("plot show figure title xlabel ylabel legend grid bar barh hist scatter pie subplot subplots savefig xlim ylim axis imshow tight_layout text annotate"),
+      pyplot: W("plot show figure title xlabel ylabel legend grid bar barh hist scatter pie subplot subplots savefig xlim ylim axis imshow tight_layout text annotate"),
+      math: W("pi e sqrt sin cos tan log log10 floor ceil factorial pow fabs radians degrees gcd inf"),
+      random: W("random randint choice shuffle uniform sample seed randrange"),
+      np: W("array arange linspace zeros ones sin cos tan sqrt mean sum max min pi random reshape dot"),
+      numpy: W("array arange linspace zeros ones sin cos tan sqrt mean sum max min pi random reshape dot"),
+      os: W("path listdir getcwd mkdir remove rename environ sep"),
+      time: W("time sleep strftime localtime perf_counter"),
+      sys: W("argv exit path version platform")
+    };
+    const K = monaco.languages.CompletionItemKind;
+    monaco.languages.registerCompletionItemProvider("python", {
+      triggerCharacters: ["."],
+      provideCompletionItems(model, pos) {
+        const w = model.getWordUntilPosition(pos);
+        const range = {startLineNumber: pos.lineNumber, endLineNumber: pos.lineNumber, startColumn: w.startColumn, endColumn: w.endColumn};
+        const line = model.getLineContent(pos.lineNumber).slice(0, pos.column - 1);
+        const mk = (list, kind) => ({suggestions: list.map(l => ({label: l, kind, insertText: l, range}))});
+        let m = line.match(/^\s*from\s+([\w.]+)\s+import\s+\w*$/);
+        if (m) return mk(subs[m[1]] || mem[m[1]] || [], K.Module);
+        m = line.match(/([\w.]+)\.\w*$/);
+        if (m) {
+          const isImp = /^\s*(import|from)\s/.test(line);
+          return mk((isImp ? subs[m[1]] : mem[m[1].split(".").pop()] || subs[m[1]]) || [], isImp ? K.Module : K.Method);
+        }
+        if (/^\s*(import|from)\s+\w*$/.test(line)) return mk(mods, K.Module);
+        const words = [...new Set(model.getValue().match(/[A-Za-z_]\w{2,}/g) || [])]
+          .filter(x => x !== w.word && !kw.includes(x) && !bi.includes(x));
+        return {suggestions: [
+          ...kw.map(l => ({label: l, kind: K.Keyword, insertText: l, range})),
+          ...bi.map(l => ({label: l, kind: K.Function, insertText: l, range})),
+          ...words.map(l => ({label: l, kind: K.Variable, insertText: l, range}))
+        ]};
+      }
+    });
+  }
+
   /* ---------- Start ---------- */
   renderFiles(); renderProblems();
   function fallback() {
@@ -312,6 +337,7 @@
     require.config({paths: {vs: M + "vs"}});
     require(["vs/editor/editor.main"], function () {
       mReady = true;
+      setupPython();
       editor = monaco.editor.create($("editor"), {
         value: files[active] || "", language: lang(active), theme: "vs-dark",
         automaticLayout: true, minimap: {enabled: false}, fontFamily: "Fira Code, Consolas, monospace",

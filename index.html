@@ -16,6 +16,16 @@
       <div class="brand"><span class="brand-mark">Z</span><span>VS-ZKB <b>Code Studio</b></span></div>
       <div class="top-actions">
         <span class="save-status" id="saveStatus">All changes saved locally</span>
+        <button
+  class="btn secondary"
+  id="explorerToggleBtn"
+  type="button"
+  onclick="toggleExplorer()"
+  aria-expanded="true"
+  title="Show or hide Explorer"
+>
+  Hide Explorer
+</button>
         <button class="btn secondary" id="downloadBtn" title="Download current file">Download file</button>
         <button class="btn primary" id="runBtn"><span>▶</span> Run</button>
       </div>
@@ -56,11 +66,30 @@
           <div id="outputView" class="output-view"><div class="empty-output">▶ Run your code to see output here.</div></div>
           <div id="previewView" class="preview-view hidden"><iframe id="previewFrame" title="Live website preview" sandbox="allow-scripts"></iframe></div>
         </section>
+        <!-- Fixed advertisement area -->
+<div class="ad-slot" id="adSlot">
+  <span class="ad-label">ADVERTISEMENT</span>
+  <span class="ad-placeholder">Ad space</span>
+</div>
         <footer class="statusbar"><span id="languageStatus">Python</span><span id="cursorStatus">Ln 1, Col 1</span><span>UTF-8</span><span>VS-ZKB Code Studio</span></footer>
       </main>
     </div>
   </div>
   <script src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js"></script>
   <script src="./static/app.js"></script>
+  <script>
+  function toggleExplorer() {
+    const workspace = document.querySelector(".workspace");
+    const button = document.getElementById("explorerToggleBtn");
+
+    if (!workspace || !button) return;
+
+    const isHidden = workspace.classList.toggle("explorer-hidden");
+
+    button.textContent = isHidden ? "Show Explorer" : "Hide Explorer";
+    button.setAttribute("aria-expanded", String(!isHidden));
+    button.title = isHidden ? "Show Explorer" : "Hide Explorer";
+  }
+</script>
 </body>
 </html>

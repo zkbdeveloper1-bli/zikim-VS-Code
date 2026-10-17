@@ -16,3 +16,38 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-famil
   object-fit: contain;
   object-position: center;
 }
+
+/* Explorer Show / Hide */
+.workspace.explorer-hidden .sidebar {
+  display: none;
+}
+
+#explorerToggleBtn {
+  white-space: nowrap;
+}
+
+/* Fixed Advertisement Area */
+.ad-slot {
+  flex: 0 0 64px;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ad-label {
+  font-size: 9px;
+  letter-spacing: 1px;
+  opacity: 0.7;
+}
+
+.ad-placeholder {
+  padding: 6px 16px;
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+}

@@ -1,294 +1,77 @@
+:root{--bg:#1e1e1e;--panel:#252526;--line:#3c3c3c;--text:#d4d4d4;--muted:#9a9a9a;--hover:#2a2d2e;--accent:#0e7bd8;--err:#f48771;--warn:#cca700}
+body.light{--bg:#ffffff;--panel:#f3f3f3;--line:#d0d0d0;--text:#222;--muted:#666;--hover:#e8e8e8}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px "Segoe UI",Inter,Arial,sans-serif}
+.hidden{display:none!important}
+.app-shell{display:flex;flex-direction:column;height:100vh}
 
-/* =========================
-   SETTINGS MENU
-   ========================= */
+/* top bar */
+.topbar{position:relative;z-index:100;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:6px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:8px;font-size:14px}
+.brand-logo{height:24px;width:auto}
+.top-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.save-status{color:var(--muted);font-size:11px;margin-right:6px}
+.btn{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:6px 12px;font:inherit;cursor:pointer}
+.btn:hover{background:var(--hover)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn:disabled{opacity:.6;cursor:wait}
 
-.topbar {
-  position: relative;
-  z-index: 100;
-}
+/* settings */
+.settings-menu{position:absolute;top:44px;right:10px;width:220px;padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 30px #0006}
+.settings-title{padding:6px 10px;color:var(--muted);font-size:10px;font-weight:700;letter-spacing:1px}
+.settings-menu button{display:block;width:100%;padding:10px;text-align:left;background:transparent;color:var(--text);border:0;border-radius:4px;font:inherit;cursor:pointer}
+.settings-menu button:hover{background:var(--hover)}
 
-.settings-menu {
-  position: absolute;
-  top: 48px;
-  right: 110px;
-  z-index: 1000;
-  width: 220px;
-  padding: 8px;
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-}
+/* explorer (top) */
+.explorer{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+.file-tree{display:flex;gap:4px;flex-wrap:wrap}
+.file{display:flex;align-items:center;gap:6px;padding:5px 8px 5px 12px;border:1px solid var(--line);border-radius:5px;background:var(--bg);cursor:pointer;white-space:nowrap}
+.file:hover{background:var(--hover)}
+.file.active{border-color:var(--accent);box-shadow:inset 0 -2px 0 var(--accent)}
+.file button{background:none;border:0;color:var(--muted);cursor:pointer;font-size:14px;padding:0 2px}
+.file button:hover{color:var(--err)}
+.add-btn{width:30px;height:30px;border-radius:5px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:20px;line-height:1;cursor:pointer}
+.add-form{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.add-form input,.add-form select{background:var(--bg);color:var(--text);border:1px solid var(--accent);border-radius:5px;padding:6px 8px;font:inherit}
+.add-form input{width:150px}
 
-.settings-title {
-  padding: 8px 10px;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 1px;
-}
+/* editor */
+.main{flex:1;min-height:0;display:flex;flex-direction:column}
+.editor{flex:1;min-height:80px}
+.fallback{flex:1;min-height:80px;display:flex}
+.fallback textarea{flex:1;background:var(--bg);color:var(--text);border:0;padding:12px;font:13px Consolas,monospace;resize:none;outline:none}
 
-.settings-menu button {
-  display: block;
-  width: 100%;
-  padding: 10px;
-  text-align: left;
-  background: transparent;
-  color: var(--text);
-  border: 0;
-  border-radius: 4px;
-  font: inherit;
-  cursor: pointer;
-}
+/* bottom panel */
+.panel{height:230px;display:flex;flex-direction:column;border-top:1px solid var(--line);background:var(--bg)}
+.panel-head{display:flex;justify-content:space-between;align-items:center;background:var(--panel);padding:0 8px}
+.panel-tab,.panel-actions button{background:none;border:0;color:var(--muted);padding:8px 10px;font:inherit;font-size:11px;letter-spacing:.5px;cursor:pointer}
+.panel-tab.active{color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)}
+.badge{background:var(--accent);color:#fff;border-radius:9px;padding:0 6px;font-size:10px}
+.view{flex:1;min-height:0;overflow:auto;font:13px Consolas,"Fira Code",monospace}
+#termView{display:flex;flex-direction:column;overflow:hidden}
+.term-out{flex:1;overflow:auto;padding:8px 12px;white-space:pre-wrap}
+.term-out .err{color:var(--err)}
+.dim{color:var(--muted);padding:8px 12px}
+.term-in{display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid var(--line);background:var(--panel)}
+.term-in input{flex:1;min-width:0;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:4px;padding:6px 8px;font:inherit}
+.term-in input:focus{border-color:var(--accent);outline:none}
+.prob{padding:6px 12px;cursor:pointer;border-bottom:1px solid var(--line)}
+.prob:hover{background:var(--hover)}
+.prob.err{color:var(--err)}.prob.warn{color:var(--warn)}
 
-.settings-menu button:hover {
-  background: var(--hover);
-}
+/* ad + status */
+.ad-slot{flex:0 0 48px;display:flex;align-items:center;justify-content:center;gap:12px;border-top:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:11px}
+.ad-label{font-size:9px;letter-spacing:1px;opacity:.7}
+.ad-placeholder{padding:4px 16px;border:1px dashed var(--line);border-radius:4px}
+.statusbar{display:flex;gap:18px;padding:3px 12px;background:var(--accent);color:#fff;font-size:11px}
 
-/* =========================
-   DEVICE SELECTION POPUP
-   ========================= */
+/* separate window (graphics / preview) */
+.float{position:fixed;top:90px;right:30px;width:480px;height:360px;min-width:240px;min-height:160px;z-index:500;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 18px 60px #0008;resize:both;overflow:hidden}
+.float-bar{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--panel);color:var(--text);cursor:move;user-select:none;touch-action:none}
+.float-bar button{background:none;border:0;color:var(--text);cursor:pointer;font-size:14px}
+.float iframe{flex:1;border:0;width:100%;background:#fff}
 
-.device-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: rgba(0, 0, 0, 0.78);
-}
-
-.device-overlay.hidden {
-  display: none !important;
-}
-
-.device-dialog {
-  width: 100%;
-  max-width: 440px;
-  max-height: 90vh;
-  overflow-y: auto;
-  padding: 25px;
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.4);
-}
-
-.device-dialog h2 {
-  margin: 0 0 10px;
-  font-size: 21px;
-}
-
-.device-dialog > p {
-  color: var(--muted);
-  line-height: 1.5;
-}
-
-.device-options {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin: 22px 0;
-}
-
-.device-option {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 18px 10px;
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  font: inherit;
-  cursor: pointer;
-}
-
-.device-option:hover,
-.device-option:focus-visible {
-  border-color: var(--accent);
-  outline: none;
-}
-
-.device-icon {
-  font-size: 32px;
-}
-
-.device-option small {
-  color: var(--muted);
-  line-height: 1.4;
-}
-
-.remember-choice {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  cursor: pointer;
-  line-height: 1.5;
-}
-
-.remember-choice input {
-  width: 17px;
-  height: 17px;
-  accent-color: var(--accent);
-  flex-shrink: 0;
-}
-
-.device-note {
-  margin-bottom: 0;
-  font-size: 11px;
-}
-
-/* =========================
-   EXPLORER AND OUTPUT PANEL
-   ========================= */
-
-.workspace.explorer-hidden .sidebar {
-  display: none !important;
-}
-
-.panel.panel-hidden {
-  display: none !important;
-}
-
-#explorerToggleBtn {
-  white-space: nowrap;
-}
-
-/* =========================
-   ADVERTISEMENT PLACEHOLDER
-   ========================= */
-
-.ad-slot {
-  flex: 0 0 64px;
-  min-height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  border-top: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.ad-label {
-  font-size: 9px;
-  letter-spacing: 1px;
-  opacity: 0.7;
-}
-
-.ad-placeholder {
-  padding: 6px 16px;
-  border: 1px dashed var(--line);
-  border-radius: 4px;
-}
-
-/* =========================
-   MOBILE LAYOUT
-   ========================= */
-
-body.mobile-mode .activitybar {
-  display: none;
-}
-
-body.mobile-mode .topbar {
-  height: auto;
-  min-height: 52px;
-  padding: 8px;
-  flex-wrap: wrap;
-}
-
-body.mobile-mode .top-actions {
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-body.mobile-mode .brand {
-  font-size: 12px;
-}
-
-body.mobile-mode .save-status {
-  display: none;
-}
-
-body.mobile-mode .workspace {
-  position: relative;
-  min-height: 0;
-}
-
-body.mobile-mode .main-area {
-  width: 100%;
-  min-width: 0;
-}
-
-body.mobile-mode .sidebar {
-  position: absolute;
-  z-index: 50;
-  top: 0;
-  bottom: 23px;
-  left: 0;
-  width: min(82vw, 280px);
-  min-width: 0;
-  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.35);
-}
-
-body.mobile-mode .editor {
-  min-height: 100px;
-}
-
-body.mobile-mode .panel {
-  height: 35%;
-  min-height: 120px;
-}
-
-body.mobile-mode .statusbar span:last-child {
-  display: none;
-}
-
-/* =========================
-   SMALL SCREENS
-   ========================= */
-
-@media (max-width: 760px) {
-  .settings-menu {
-    right: 8px;
-    top: 48px;
-    max-width: calc(100vw - 16px);
-  }
-
-  #explorerToggleBtn {
-    padding: 7px 8px;
-    font-size: 11px;
-  }
-
-  .ad-slot {
-    flex-basis: 54px;
-    min-height: 54px;
-  }
-}
-
-@media (max-width: 380px) {
-  .device-dialog {
-    padding: 18px;
-  }
-
-  .device-options {
-    gap: 8px;
-  }
-
-  .device-option {
-    padding: 14px 6px;
-  }
-
-  body.mobile-mode .btn {
-    padding: 7px;
-    font-size: 11px;
-  }
+@media (max-width:760px){
+  .float{left:8px;right:8px;width:auto}
+  .save-status{display:none}
 }

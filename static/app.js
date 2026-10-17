@@ -1,380 +1,329 @@
 (() => {
   const $ = (id) => document.getElementById(id);
-  const starterFiles = {
-    "welcome.py": 'print("Hello from VS-ZKB Code Studio!")\n\nname = "Zulqarnain"\nprint("Welcome,", name)\n',
+  const KEY = "vszkb-project-v1";
+  const M = "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/";
+  const LANG = {py:"python", html:"html", htm:"html", css:"css", js:"javascript", json:"json", md:"markdown", txt:"plaintext", c:"c", cpp:"cpp", java:"java"};
+  const starter = {
+    "welcome.py": 'print("Hello from VS-ZKB Code Studio!")\n\nname = input("Your name: ")\nprint("Welcome,", name)\n',
     "index.html": '<!doctype html>\n<html lang="en">\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n  <title>My Website</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <main class="card">\n    <h1>Hello, world! 👋</h1>\n    <p>My first website in VS-ZKB Code Studio.</p>\n    <button id="helloBtn">Click me</button>\n    <p id="message"></p>\n  </main>\n  <script src="script.js"></script>\n</body>\n</html>\n',
     "style.css": 'body { font-family: Arial, sans-serif; background: #101827; color: #f8fafc; min-height: 100vh; display: grid; place-items: center; margin: 0; }\n.card { text-align: center; padding: 36px; border-radius: 18px; background: #1e293b; box-shadow: 0 20px 60px #0005; }\nbutton { background: #38bdf8; border: 0; border-radius: 8px; padding: 10px 18px; cursor: pointer; font-weight: bold; }\n',
     "script.js": 'document.getElementById("helloBtn").addEventListener("click", () => {\n  document.getElementById("message").textContent = "JavaScript is working!";\n  console.log("Button clicked!");\n});\nconsole.log("Website loaded successfully.");\n'
   };
-  let files = {};
-  let activeFile = "";
-  let openTabs = [];
-  let editor = null;
-  let monacoReady = false;
-  let saveTimer = null;
+
+  let files = {}, active = "", editor = null, mReady = false, saveT = null;
+  let pending = null, marks = [], rt = [];
 
   try {
-    const saved = JSON.parse(localStorage.getItem("vszkb-project-v1") || "null");
-    files = saved && saved.files ? saved.files : {...starterFiles};
-    openTabs = saved && Array.isArray(saved.openTabs) ? saved.openTabs.filter(n => files[n] !== undefined) : ["welcome.py", "index.html"];
-  } catch { files = {...starterFiles}; }
-  if (!Object.keys(files).length) files = {...starterFiles};
-  if (!openTabs.length) openTabs = [Object.keys(files)[0]];
-  activeFile = openTabs[0];
+    const s = JSON.parse(localStorage.getItem(KEY) || "null");
+    files = s && s.files ? s.files : {...starter};
+  } catch { files = {...starter}; }
+  if (!Object.keys(files).length) files = {...starter};
+  active = files["welcome.py"] !== undefined ? "welcome.py" : Object.keys(files)[0];
 
-  function saveProject() {
-    try {
-      localStorage.setItem("vszkb-project-v1", JSON.stringify({files, openTabs}));
-      $("saveStatus").textContent = "Saved locally";
-    } catch {
-      $("saveStatus").textContent = "Browser storage full";
-    }
+  const ext = (n) => n.includes(".") ? n.split(".").pop().toLowerCase() : "";
+  const lang = (n) => LANG[ext(n)] || "plaintext";
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify({files})); $("saveStatus").textContent = "Saved locally"; }
+    catch { $("saveStatus").textContent = "Browser storage full"; }
   }
-  function scheduleSave() {
+  function sched() {
     $("saveStatus").textContent = "Saving…";
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveProject, 250);
+    clearTimeout(saveT); saveT = setTimeout(save, 250);
   }
-  function ext(name) { return (name.split(".").pop() || "").toLowerCase(); }
-  function languageFor(name) {
-    const e = ext(name);
-    return ({py:"python", html:"html", htm:"html", css:"css", js:"javascript", json:"json", md:"markdown", txt:"plaintext"})[e] || "plaintext";
-  }
-  function fileEmoji(name) {
-    return ({py:"🐍", html:"🌐", htm:"🌐", css:"🎨", js:"🟨", json:"{}", md:"M", txt:"≡"})[ext(name)] || "📄";
-  }
-  function renderTree() {
-    const tree = $("fileTree"); tree.innerHTML = "";
-    Object.keys(files).sort((a,b) => a.localeCompare(b)).forEach(name => {
-      const row = document.createElement("div");
-      row.className = "tree-item" + (name === activeFile ? " selected" : "");
-      row.title = name;
-      const ico = document.createElement("span"); ico.className = "file-icon"; ico.textContent = fileEmoji(name);
-      const label = document.createElement("span"); label.textContent = name;
-      row.append(ico,label);
-      row.addEventListener("click", () => openFile(name));
-      row.addEventListener("contextmenu", (e) => {
-        e.preventDefault();
-        const action = prompt(`File: ${name}\nType "rename" to rename, or "delete" to delete:`);
-        if (action === "rename") renameFile(name);
-        if (action === "delete") deleteFile(name);
-      });
-      tree.appendChild(row);
-    });
-  }
-  function renderTabs() {
-    const tabs = $("tabs"); tabs.innerHTML = "";
-    openTabs.forEach(name => {
-      const tab = document.createElement("div"); tab.className = "tab" + (name === activeFile ? " active" : "");
-      const label = document.createElement("span"); label.textContent = fileEmoji(name) + " " + name;
-      label.addEventListener("click", () => openFile(name));
-      const close = document.createElement("button"); close.className = "close-tab"; close.textContent = "×"; close.title = "Close tab";
-      close.addEventListener("click", e => { e.stopPropagation(); closeTab(name); });
-      tab.append(label,close); tabs.appendChild(tab);
-    });
-    $("breadcrumbs").textContent = activeFile || "";
-    $("languageStatus").textContent = languageFor(activeFile || "").replace(/^./, c => c.toUpperCase());
-  }
-  function openFile(name) {
-    if (files[name] === undefined) return;
-    if (editor && activeFile) files[activeFile] = editor.getValue();
-    activeFile = name;
-    if (!openTabs.includes(name)) openTabs.push(name);
-    renderTree(); renderTabs();
-    if (monacoReady) {
-      editor.setValue(files[name]);
-      monaco.editor.setModelLanguage(editor.getModel(), languageFor(name));
+  const getCode = () => mReady ? editor.getValue() : $("plainEditor").value;
+  function setCode(text) {
+    if (mReady) {
+      editor.setValue(text);
+      monaco.editor.setModelLanguage(editor.getModel(), lang(active));
       editor.focus();
-    } else {
-      $("plainEditor").value = files[name];
-    }
-    saveProject();
+    } else $("plainEditor").value = text;
   }
-  function closeTab(name) {
-    if (editor && name === activeFile) files[name] = editor.getValue();
-    openTabs = openTabs.filter(n => n !== name);
-    if (!openTabs.length) openTabs.push(Object.keys(files)[0]);
-    const next = openTabs.includes(activeFile) ? activeFile : openTabs[openTabs.length-1];
-    activeFile = next;
-    renderTabs(); renderTree();
-    if (monacoReady) { editor.setValue(files[activeFile] || ""); monaco.editor.setModelLanguage(editor.getModel(), languageFor(activeFile)); }
-    else $("plainEditor").value = files[activeFile] || "";
-    saveProject();
-  }
-  function newFile() {
-    const name = prompt("New file name (for example: app.py or index.html):");
-    if (!name) return;
-    if (name.includes("/") || name.includes("\\") || name.trim() !== name) return alert("Use a simple file name without folders.");
-    if (files[name] !== undefined) return alert("A file with that name already exists.");
-    files[name] = ""; openFile(name); scheduleSave();
-  }
-  function newFolder() {
-    alert("This starter version stores project files in a flat file list. Folder support can be added in the next version.");
-  }
-  function renameFile(oldName) {
-    const newName = prompt("Enter the new file name:", oldName);
-    if (!newName || newName === oldName) return;
-    if (newName.includes("/") || newName.includes("\\") || files[newName] !== undefined) return alert("Invalid name or a file with that name already exists.");
-    files[newName] = files[oldName]; delete files[oldName];
-    openTabs = openTabs.map(n => n === oldName ? newName : n);
-    if (activeFile === oldName) activeFile = newName;
-    renderTree(); renderTabs(); openFile(activeFile); scheduleSave();
-  }
-  function deleteFile(name) {
-    if (!confirm(`Delete ${name} from this browser project?`)) return;
-    delete files[name]; openTabs = openTabs.filter(n => n !== name);
-    if (!Object.keys(files).length) files["welcome.py"] = 'print("Hello!")\\n';
-    if (!openTabs.length) openTabs = [Object.keys(files)[0]];
-    activeFile = openTabs[0]; renderTree(); openFile(activeFile); scheduleSave();
-  }
-  function currentCode() { return monacoReady ? editor.getValue() : $("plainEditor").value; }
-  function setOutput(text, type="stdout") {
-    const out = $("outputView"); out.innerHTML = "";
-    const node = document.createElement("div"); node.className = type; node.textContent = text || (type === "stderr" ? "" : "(No output)");
-    out.appendChild(node);
-  }
-  function appendTerminalText(text, type = "stdout") {
-  const out = $("outputView");
-  const node = document.createElement("div");
-  node.className = type;
-  node.textContent = text;
-  out.appendChild(node);
-  out.scrollTop = out.scrollHeight;
-}
 
-function readTerminalInput(promptText = "") {
-  return new Promise((resolve) => {
-    const out = $("outputView");
-
-    if (promptText) {
-      const promptLine = document.createElement("span");
-      promptLine.textContent = promptText;
-      out.appendChild(promptLine);
-    }
-
-    const line = document.createElement("div");
-    line.style.display = "flex";
-    line.style.gap = "8px";
-    line.style.alignItems = "center";
-
-    const input = document.createElement("input");
-    input.type = "text";
-    input.autocomplete = "off";
-    input.spellcheck = false;
-    input.setAttribute("aria-label", "Python terminal input");
-    input.style.flex = "1";
-    input.style.minWidth = "0";
-    input.style.background = "#111827";
-    input.style.color = "#ffffff";
-    input.style.border = "1px solid #64748b";
-    input.style.padding = "8px";
-    input.style.font = "inherit";
-
-    line.appendChild(input);
-    out.appendChild(line);
-    out.scrollTop = out.scrollHeight;
-
-    input.focus();
-
-    input.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter") return;
-
-      event.preventDefault();
-
-      const answer = input.value;
-      const answerText = document.createElement("span");
-      answerText.textContent = answer;
-
-      line.replaceChildren(answerText);
-      resolve(answer);
+  /* ---------- Explorer (top) ---------- */
+  function renderFiles() {
+    const t = $("fileTree"); t.innerHTML = "";
+    Object.keys(files).sort((a, b) => a.localeCompare(b)).forEach(n => {
+      const c = document.createElement("div");
+      c.className = "file" + (n === active ? " active" : "");
+      c.title = "Click to open · Double-click to rename";
+      const l = document.createElement("span"); l.textContent = n;
+      const x = document.createElement("button"); x.textContent = "×"; x.title = "Delete file";
+      x.onclick = (e) => { e.stopPropagation(); delFile(n); };
+      c.onclick = () => openFile(n);
+      c.ondblclick = () => renameFile(n);
+      c.append(l, x); t.appendChild(c);
     });
+    $("langStatus").textContent = lang(active);
+  }
+  function openFile(n) {
+    if (files[n] === undefined) return;
+    if (files[active] !== undefined) files[active] = getCode();
+    active = n; renderFiles(); setCode(files[n]); save();
+  }
+  function renameFile(old) {
+    const nn = prompt("Enter the new file name:", old);
+    if (!nn || nn === old) return;
+    if (/[\/\\]/.test(nn) || files[nn] !== undefined) return alert("Invalid name, or a file with that name already exists.");
+    files[active] = getCode();
+    files[nn] = files[old]; delete files[old];
+    if (active === old) active = nn;
+    renderFiles(); setCode(files[active]); save();
+  }
+  function delFile(n) {
+    if (!confirm(`Delete ${n} from this browser project?`)) return;
+    if (files[active] !== undefined && active !== n) files[active] = getCode();
+    delete files[n];
+    if (!Object.keys(files).length) files["welcome.py"] = 'print("Hello!")\n';
+    if (active === n) active = Object.keys(files)[0];
+    renderFiles(); setCode(files[active]); save();
+  }
+  $("addBtn").onclick = () => {
+    $("addForm").classList.toggle("hidden");
+    $("newName").value = ""; $("newName").focus();
+  };
+  $("cancelAdd").onclick = () => $("addForm").classList.add("hidden");
+  $("addForm").onsubmit = (e) => {
+    e.preventDefault();
+    let n = $("newName").value.trim();
+    if (!n) return;
+    if (!/\.[a-z0-9+]+$/i.test(n)) n += $("newExt").value;
+    if (/[\/\\]/.test(n)) return alert("Use a simple file name without folders.");
+    if (files[n] !== undefined) return alert("A file with that name already exists.");
+    files[n] = "";
+    $("addForm").classList.add("hidden");
+    openFile(n);
+  };
+
+  /* ---------- Terminal ---------- */
+  function term(text, cls) {
+    const d = document.createElement("div");
+    if (cls) d.className = cls;
+    d.textContent = text;
+    $("termOut").appendChild(d);
+    $("termOut").scrollTop = 1e9;
+  }
+  function readInput(p) {
+    return new Promise((resolve) => {
+      pending = {resolve, p: String(p ?? "")};
+      $("termPrompt").textContent = pending.p || "›";
+      showPanel("term");
+      $("termInput").focus();
+    });
+  }
+  $("termInput").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const v = e.target.value; e.target.value = "";
+    if (pending) {
+      const q = pending; pending = null;
+      $("termPrompt").textContent = "›";
+      term(q.p + v); q.resolve(v);
+    } else term("› " + v + "   (no program is waiting for input)", "dim");
   });
-}
+
+  /* ---------- Problems ---------- */
+  function renderProblems() {
+    const all = [...rt, ...marks];
+    $("probCount").textContent = all.length;
+    const v = $("problemsView"); v.innerHTML = "";
+    if (!all.length) { v.innerHTML = '<div class="dim">No problems detected.</div>'; return; }
+    all.forEach(p => {
+      const d = document.createElement("div");
+      d.className = "prob " + (p.sev >= 8 ? "err" : "warn");
+      d.textContent = `${p.sev >= 8 ? "✖" : "⚠"} ${p.msg}  [${p.file}, line ${p.line}]`;
+      d.onclick = () => {
+        if (p.file !== active) openFile(p.file);
+        if (editor) { editor.revealLineInCenter(p.line); editor.setPosition({lineNumber: p.line, column: 1}); editor.focus(); }
+      };
+      v.appendChild(d);
+    });
+  }
   function showPanel(which) {
-    $("outputView").classList.toggle("hidden", which !== "output");
-    $("previewView").classList.toggle("hidden", which !== "preview");
+    $("panel").classList.remove("hidden");
+    $("setPanel").textContent = "Hide Terminal";
+    $("termView").classList.toggle("hidden", which !== "term");
+    $("problemsView").classList.toggle("hidden", which !== "problems");
     document.querySelectorAll(".panel-tab").forEach(b => b.classList.toggle("active", b.dataset.panel === which));
   }
- 
-async function runCode() {
-  if (!activeFile) return;
+  document.querySelectorAll(".panel-tab").forEach(b => b.onclick = () => showPanel(b.dataset.panel));
+  $("clearBtn").onclick = () => { $("termOut").innerHTML = ""; rt = []; renderProblems(); };
+  $("hidePanelBtn").onclick = togglePanel;
 
-  files[activeFile] = currentCode();
-  scheduleSave();
-
-  const language = languageFor(activeFile);
-
-  if (language === "python") {
-    showPanel("output");
-    setOutput("Starting browser-based Python… (first run may take a little while)");
-
-    $("runBtn").disabled = true;
-    $("runBtn").textContent = "Running…";
-
-    try {
-      if (!window.loadPyodide) {
-        throw new Error(
-          "Python runtime did not load. Check your internet connection and reload."
-        );
-      }
-
-      if (!window.vszkbPyodide) {
-        window.vszkbPyodide = await loadPyodide();
-      }
-
-      const py = window.vszkbPyodide;
-
-      // Clear previous output and errors.
-      window.vszkbStdout = "";
-      window.vszkbStderr = "";
-
-      // Send Python output directly to the terminal.
-      py.setStdout({
-        batched: (text) => {
-          appendTerminalText(text + "\n");
-        }
-      });
-
-      py.setStderr({
-        batched: (text) => {
-          appendTerminalText(text + "\n", "stderr");
-        }
-      });
-
-      // Provide input() through the terminal.
-      py.globals.set(
-        "__vszkb_input",
-        py.toPy(async (promptText) => {
-          return await readTerminalInput(
-            String(promptText ?? "")
-          );
-        })
-      );
-
-      let code = files[activeFile];
-      appendTerminalText("Checking Python libraries...");
-
-      await py.loadPackagesFromImports(code);
-      // Initial support for simple input() calls.
-      code = code.replace(
-        /\binput\s*\(/g,
-        "await __vszkb_input("
-      );
-
-      try {
-        await py.runPythonAsync(code);
-      } catch (err) {
-        appendTerminalText(String(err), "stderr");
-      } finally {
-        py.globals.delete("__vszkb_input");
-      }
-
-    } catch (err) {
-      appendTerminalText(
-        "Could not run Python: " + err.message,
-        "stderr"
-      );
-    } finally {
-      $("runBtn").disabled = false;
-      $("runBtn").innerHTML = "<span>▶</span> Run";
-    }
-
-  } else if (
-    ["html", "css", "javascript"].includes(language) ||
-    activeFile === "index.html"
-  ) {
-    const html = buildPreview();
-    $("previewFrame").srcdoc = html;
-    showPanel("preview");
-
-  } else {
-    showPanel("output");
-
-    setOutput(
-      `Run is not configured for .${ext(activeFile)} files yet. Supported: .py, .html, .css, .js`,
-      "stderr"
-    );
+  /* ---------- Separate window (graphics / preview) ---------- */
+  function openFloat(title, html) {
+    $("floatTitle").textContent = title;
+    $("floatFrame").srcdoc = html;
+    $("floatWin").classList.remove("hidden");
   }
-}
+  $("floatClose").onclick = () => $("floatWin").classList.add("hidden");
+  (() => {
+    const bar = $("floatBar"), win = $("floatWin"); let d = null;
+    bar.onpointerdown = (e) => {
+      if (e.target.tagName === "BUTTON") return;
+      const r = win.getBoundingClientRect();
+      d = {x: e.clientX - r.left, y: e.clientY - r.top};
+      bar.setPointerCapture(e.pointerId);
+    };
+    bar.onpointermove = (e) => {
+      if (!d) return;
+      win.style.left = Math.max(0, e.clientX - d.x) + "px";
+      win.style.top = Math.max(0, e.clientY - d.y) + "px";
+      win.style.right = "auto";
+    };
+    bar.onpointerup = () => { d = null; };
+  })();
 
   function buildPreview() {
-    let htmlName = Object.keys(files).find(n => ext(n) === "html" || ext(n) === "htm");
-    let html = htmlName ? files[htmlName] : '<!doctype html><html><head><meta charset="utf-8"></head><body><h1>Preview</h1></body></html>';
-    const cssName = Object.keys(files).find(n => ext(n) === "css");
-    const jsName = Object.keys(files).find(n => ext(n) === "js");
-    if (cssName) {
-      const style = document.createElement("style"); style.textContent = files[cssName];
-      html = html.replace(/<\/head>/i, style.outerHTML + "\n</head>");
-      if (!/<\/head>/i.test(html)) html = style.outerHTML + html;
-    }
-    if (jsName) {
-      const script = document.createElement("script"); script.textContent = files[jsName];
-      html = html.replace(/<\/body>/i, script.outerHTML + "\n</body>");
-      if (!/<\/body>/i.test(html)) html += script.outerHTML;
-    }
+    const name = ext(active) === "html" || ext(active) === "htm" ? active
+      : Object.keys(files).find(n => ext(n) === "html" || ext(n) === "htm");
+    let html = name ? files[name] : '<!doctype html><html><head><meta charset="utf-8"></head><body><h1>Preview</h1></body></html>';
+    html = html
+      .replace(/<link[^>]+href=["']([^"']+)["'][^>]*>/gi, (m, h) => files[h] !== undefined ? `<style>${files[h]}</style>` : m)
+      .replace(/<script[^>]+src=["']([^"']+)["'][^>]*>\s*<\/script>/gi, (m, s) =>
+        files[s] !== undefined ? `<script>${files[s].replace(/<\/script/gi, "<\\/script")}<\/script>` : m);
     return html;
   }
-  function downloadCurrent() {
-    files[activeFile] = currentCode();
-    const blob = new Blob([files[activeFile]], {type:"text/plain;charset=utf-8"});
-    const url = URL.createObjectURL(blob); const a = document.createElement("a");
-    a.href = url; a.download = activeFile; a.click(); URL.revokeObjectURL(url);
+
+  async function showFigures(py) {
+    try {
+      const imgs = py.runPython(
+        'import matplotlib.pyplot as plt, io, base64\n' +
+        'o = []\n' +
+        'for n in plt.get_fignums():\n' +
+        '    b = io.BytesIO(); plt.figure(n).savefig(b, format="png", bbox_inches="tight")\n' +
+        '    o.append(base64.b64encode(b.getvalue()).decode())\n' +
+        'plt.close("all")\no'
+      ).toJs();
+      if (imgs.length) openFloat("Graphics",
+        '<body style="margin:0;background:#fff;text-align:center">' +
+        imgs.map(i => `<img style="max-width:100%" src="data:image/png;base64,${i}">`).join("") + "</body>");
+    } catch {}
   }
 
-  $("newFileBtn").addEventListener("click", newFile);
-  $("newFolderBtn").addEventListener("click", newFolder);
-  $("runBtn").addEventListener("click", runCode);
-  $("downloadBtn").addEventListener("click", downloadCurrent);
-  $("clearOutputBtn").addEventListener("click", () => setOutput(""));
-  $("togglePanelBtn").addEventListener("click", () => $("outputView").parentElement.classList.toggle("hidden"));
-  document.querySelectorAll(".panel-tab").forEach(b => b.addEventListener("click", () => showPanel(b.dataset.panel)));
-  $("themeBtn").addEventListener("click", () => {
-    document.body.classList.toggle("light");
-    if (editor) editor.updateOptions({theme: document.body.classList.contains("light") ? "vs" : "vs-dark"});
+  /* ---------- Run ---------- */
+  async function runPython(code) {
+    showPanel("term");
+    rt = []; renderProblems();
+    $("termOut").innerHTML = "";
+    const btn = $("runBtn");
+    btn.disabled = true; btn.textContent = "Running…";
+    try {
+      if (!window.loadPyodide) throw new Error("Python runtime did not load. Check your internet connection and reload.");
+      if (!window.vszkbPyodide) {
+        term("Starting Python… (first run may take a little while)", "dim");
+        window.vszkbPyodide = await loadPyodide();
+      }
+      const py = window.vszkbPyodide;
+      py.setStdout({batched: (t) => term(t)});
+      py.setStderr({batched: (t) => term(t, "err")});
+      py.runPython('import os, warnings\nos.environ["MPLBACKEND"] = "AGG"\nwarnings.filterwarnings("ignore")');
+      py.globals.set("__vszkb_input", readInput);
+      await py.loadPackagesFromImports(code);
+      try {
+        await py.runPythonAsync(code.replace(/\binput\s*\(/g, "await __vszkb_input("));
+      } catch (err) {
+        const m = String(err).trim();
+        term(m, "err");
+        const ln = [...m.matchAll(/line (\d+)/g)].pop();
+        rt.push({sev: 8, line: ln ? +ln[1] : 1, msg: m.split("\n").pop(), file: active});
+        renderProblems();
+      } finally {
+        pending = null; $("termPrompt").textContent = "›";
+        py.globals.delete("__vszkb_input");
+      }
+      if (/matplotlib/.test(code)) await showFigures(py);
+    } catch (err) {
+      term("Could not run Python: " + err.message, "err");
+    } finally {
+      btn.disabled = false; btn.innerHTML = "<span>▶</span> Run";
+    }
+  }
+  function runCode() {
+    if (!active) return;
+    files[active] = getCode(); sched();
+    const l = lang(active);
+    if (l === "python") runPython(files[active]);
+    else if (["html", "css", "javascript"].includes(l)) openFloat("Website Preview", buildPreview());
+    else {
+      showPanel("term");
+      term(`Run is not configured for .${ext(active)} files yet. Supported: .py, .html, .css, .js`, "err");
+    }
+  }
+  $("runBtn").onclick = runCode;
+
+  function downloadCurrent() {
+    files[active] = getCode();
+    const url = URL.createObjectURL(new Blob([files[active]], {type: "text/plain;charset=utf-8"}));
+    const a = document.createElement("a"); a.href = url; a.download = active; a.click();
+    URL.revokeObjectURL(url);
+  }
+  $("downloadBtn").onclick = downloadCurrent;
+
+  /* ---------- Settings ---------- */
+  function toggleExplorer() {
+    const h = $("explorer").classList.toggle("hidden");
+    $("setExp").textContent = h ? "Show Explorer" : "Hide Explorer";
+  }
+  function togglePanel() {
+    const h = $("panel").classList.toggle("hidden");
+    $("setPanel").textContent = h ? "Show Terminal" : "Hide Terminal";
+  }
+  function toggleTheme() {
+    const light = document.body.classList.toggle("light");
+    $("setTheme").textContent = light ? "Switch to Dark Mode" : "Switch to Light Mode";
+    if (mReady) monaco.editor.setTheme(light ? "vs" : "vs-dark");
+  }
+  $("setExp").onclick = toggleExplorer;
+  $("setPanel").onclick = togglePanel;
+  $("setTheme").onclick = toggleTheme;
+  $("settingsBtn").onclick = () => $("settingsMenu").classList.toggle("hidden");
+  document.addEventListener("click", (e) => {
+    if (!$("settingsMenu").contains(e.target) && !$("settingsBtn").contains(e.target))
+      $("settingsMenu").classList.add("hidden");
   });
-  $("searchFocus").addEventListener("click", () => {
-    const query = prompt("Search in current file:");
-    if (!query) return;
-    if (editor) { editor.focus(); editor.getAction("actions.find").run(); }
-    else { const i = $("plainEditor").value.indexOf(query); if (i >= 0) $("plainEditor").setSelectionRange(i,i+query.length); }
+
+  /* ---------- Keyboard + fallback editor ---------- */
+  $("plainEditor").addEventListener("input", () => { files[active] = $("plainEditor").value; sched(); });
+  $("plainEditor").addEventListener("keydown", (e) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const t = e.target; t.setRangeText("    ", t.selectionStart, t.selectionEnd, "end");
+      files[active] = t.value; sched();
+    }
   });
-  $("plainEditor").addEventListener("input", () => { files[activeFile] = $("plainEditor").value; scheduleSave(); });
-  $("plainEditor").addEventListener("keydown", e => {
-    if (e.key === "Tab") { e.preventDefault(); const t=e.target, start=t.selectionStart, end=t.selectionEnd; t.setRangeText("    ",start,end,"end"); files[activeFile]=t.value; scheduleSave(); }
-    if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); files[activeFile]=t.value; saveProject(); }
-  });
-  document.addEventListener("keydown", e => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); if (activeFile) files[activeFile]=currentCode(); saveProject(); }
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); if (active) files[active] = getCode(); save(); }
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); runCode(); }
   });
 
-  renderTree(); renderTabs();
-  if (window.require) {
-    require.config({paths:{vs:"https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs"}});
-    require(["vs/editor/editor.main"], function () {
-      monacoReady = true;
-      $("fallbackEditor").classList.add("hidden");
-      editor = monaco.editor.create($("editor"), {
-        value: files[activeFile] || "", language: languageFor(activeFile), theme:"vs-dark",
-        automaticLayout:true, minimap:{enabled:false}, fontFamily:"Fira Code, Consolas, monospace",
-        fontSize:13, tabSize:4, wordWrap:"on", scrollBeyondLastLine:false,
-        padding:{top:12}, roundedSelection:false, renderLineHighlight:"all"
-      });
-      editor.onDidChangeModelContent(() => {
-        if (!activeFile) return;
-        files[activeFile] = editor.getValue(); scheduleSave();
-      });
-      editor.onDidChangeCursorPosition(e => $("cursorStatus").textContent = `Ln ${e.position.lineNumber}, Col ${e.position.column}`);
-      renderTree(); renderTabs();
-    }, function () {
-      $("editor").classList.add("hidden");
-      $("fallbackEditor").classList.remove("hidden");
-      $("plainEditor").value = files[activeFile] || "";
-    });
-  } else {
+  /* ---------- Start ---------- */
+  renderFiles(); renderProblems();
+  function fallback() {
     $("editor").classList.add("hidden");
     $("fallbackEditor").classList.remove("hidden");
-    $("plainEditor").value = files[activeFile] || "";
+    $("plainEditor").value = files[active] || "";
   }
-  saveProject();
+  if (window.require) {
+    window.MonacoEnvironment = {
+      getWorkerUrl: () => "data:text/javascript;charset=utf-8," + encodeURIComponent(
+        `self.MonacoEnvironment={baseUrl:"${M}"};importScripts("${M}vs/base/worker/workerMain.js");`)
+    };
+    require.config({paths: {vs: M + "vs"}});
+    require(["vs/editor/editor.main"], function () {
+      mReady = true;
+      editor = monaco.editor.create($("editor"), {
+        value: files[active] || "", language: lang(active), theme: "vs-dark",
+        automaticLayout: true, minimap: {enabled: false}, fontFamily: "Fira Code, Consolas, monospace",
+        fontSize: 13, tabSize: 4, wordWrap: "on", scrollBeyondLastLine: false, padding: {top: 12}
+      });
+      editor.onDidChangeModelContent(() => { if (active) { files[active] = editor.getValue(); sched(); } });
+      editor.onDidChangeCursorPosition(e => $("cursorStatus").textContent = `Ln ${e.position.lineNumber}, Col ${e.position.column}`);
+      monaco.editor.onDidChangeMarkers(() => {
+        marks = monaco.editor.getModelMarkers({}).map(m => ({sev: m.severity, line: m.startLineNumber, msg: m.message, file: active}));
+        renderProblems();
+      });
+    }, fallback);
+  } else fallback();
+  save();
 })();

@@ -189,11 +189,27 @@
     $("termOut").innerHTML = "";
     const btn = $("runBtn");
     btn.disabled = true; btn.textContent = "Running…";
+    const t0 = performance.now(); term("$ python " + active, "dim");
     try {
-      if (!window.loadPyodide) throw new Error("Python runtime did not load. Check your internet connection and reload.");
+      if (!window.loadPyodide) {
+        term("Loading Python engine…", "dim");
+        await new Promise((res, rej) => {
+          const sc = document.createElement("script");
+          sc.src = "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js";
+          sc.onload = res;
+          sc.onerror = () => rej(new Error("Python runtime did not load. Check your internet connection and reload."));
+          document.head.appendChild(sc);
+        });
+      }
       if (!window.vszkbPyodide) {
         term("Starting Python… (first run may take a little while)", "dim");
-        window.vszkbPyodide = await loadPyodide();
+        const bases = [null, "https://cdn.jsdelivr.net/npm/pyodide@0.27.7/", "https://unpkg.com/pyodide@0.27.7/"];
+        let lastErr = null;
+        for (const b of bases) {
+          try { delete globalThis.__pyodideLoading; window.vszkbPyodide = await (b ? loadPyodide({indexURL: b}) : loadPyodide()); break; }
+          catch (e) { lastErr = e; term("Could not download the Python engine, trying another server…", "dim"); }
+        }
+        if (!window.vszkbPyodide) throw new Error("Python engine could not be downloaded (" + (lastErr && lastErr.message ? lastErr.message : lastErr) + "). Check your internet, or try another network/VPN, then press Run again.");
       }
       const py = window.vszkbPyodide;
       py.setStdout({batched: (t) => term(t)});
@@ -212,6 +228,7 @@
       } finally {
         py.globals.delete("__vszkb_input");
       }
+      term("— finished in " + ((performance.now() - t0) / 1000).toFixed(2) + "s —", "dim");
       if (/matplotlib/.test(code)) await showFigures(py);
     } catch (err) {
       term("Could not run Python: " + err.message, "err");
@@ -224,6 +241,7 @@
     files[active] = getCode(); sched();
     const l = lang(active);
     if (l === "python") runPython(files[active]);
+    else if (l === "javascript" && !usedByPage(active)) runJS(files[active]);
     else if (["html", "css", "javascript"].includes(l)) openOutput(buildPreview());
     else {
       showPanel("term");
@@ -253,6 +271,7 @@
     const light = document.body.classList.toggle("light");
     $("setTheme").textContent = light ? "Switch to Dark Mode" : "Switch to Light Mode";
     if (mReady) monaco.editor.setTheme(light ? "vs" : "vs-dark");
+    prefs.light = light; applyPrefs();
   }
   $("setExp").onclick = toggleExplorer;
   $("setPanel").onclick = togglePanel;
@@ -277,8 +296,7 @@
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); runCode(); }
   });
 
-  /* ---------- Python autocomplete ---------- */
-  function setupPython() {
+  /* ---------- Word lists (used by suggestions) ---------- */
     const W = (x) => x.split(" ");
     const mods = W("abc argparse array ast asyncio base64 bisect calendar cmath collections colorsys copy csv dataclasses datetime decimal difflib enum fractions functools hashlib heapq html io itertools json keyword logging math matplotlib numpy operator os pandas pathlib pickle pprint queue random re scipy secrets shutil statistics string struct sys tempfile textwrap threading time timeit traceback types typing unittest urllib uuid warnings zlib");
     const kw = W("False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield");
@@ -295,6 +313,18 @@
       time: W("time sleep strftime localtime perf_counter"),
       sys: W("argv exit path version platform")
     };
+    const LISTS = {
+      python: [...kw, ...bi, ...mods],
+      javascript: W("const let var function return if else for while class new this async await console document window addEventListener querySelector getElementById setTimeout JSON Math Array Object String Number"),
+      html: W("div span p h1 h2 h3 a img ul ol li button input form table section header footer nav main script style link meta class id href src"),
+      css: W("color background margin padding border display flex grid font-size width height position align-items justify-content text-align"),
+      c: W("include stdio.h stdlib.h string.h int main printf scanf return for while if else void char float double struct sizeof"),
+      cpp: W("include iostream vector string using namespace std cout cin endl int main return for while if else class struct auto"),
+      java: W("public static void main class String System.out.println int double boolean return for while if else new import")
+    };
+
+  /* ---------- Python autocomplete ---------- */
+  function setupPython() {
     const K = monaco.languages.CompletionItemKind;
     monaco.languages.registerCompletionItemProvider("python", {
       triggerCharacters: ["."],
@@ -322,7 +352,97 @@
     });
   }
 
-    /* ---------- Ads (Google AdSense) ---------- */
+  /* ---------- Preferences, phone editor, JS console ---------- */
+  const isPhone = navigator.maxTouchPoints > 0 && Math.min(screen.width, screen.height) < 700;
+  const PREF = "vszkb-prefs-v1";
+  let prefs = {suggest: true, size: 13, wrap: true, light: false};
+  try { prefs = {...prefs, ...JSON.parse(localStorage.getItem(PREF) || "{}")}; } catch {}
+  const extraCss = document.createElement("style");
+  extraCss.textContent = ".fallback{flex-direction:column}#sugBar{display:flex;gap:6px;overflow-x:auto;padding:6px 8px;background:var(--panel);border-top:1px solid var(--line)}#sugBar button{flex:0 0 auto;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:6px 12px;font:13px Consolas,monospace}@media (max-width:760px){.topbar{padding:4px 8px}.panel{height:190px}.add-form input{width:110px}}";
+  document.head.appendChild(extraCss);
+
+  const sugBar = document.createElement("div"); sugBar.id = "sugBar"; sugBar.className = "hidden";
+  $("fallbackEditor").appendChild(sugBar);
+  function updateBar() {
+    const t = $("plainEditor"); sugBar.innerHTML = "";
+    if (!prefs.suggest || $("fallbackEditor").classList.contains("hidden")) return sugBar.classList.add("hidden");
+    const pos = t.selectionStart, cur = (t.value.slice(0, pos).match(/[\w.]*$/) || [""])[0];
+    if (!cur) return sugBar.classList.add("hidden");
+    const dot = cur.lastIndexOf("."), part = cur.slice(dot + 1);
+    const pool = dot >= 0 ? (mem[cur.slice(0, dot).split(".").pop()] || [])
+      : [...new Set([...(LISTS[lang(active)] || []), ...(t.value.match(/[A-Za-z_]\w{2,}/g) || [])])];
+    const hits = pool.filter(x => x.startsWith(part) && x !== part).slice(0, 12);
+    sugBar.classList.toggle("hidden", !hits.length);
+    hits.forEach(w => {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = w;
+      b.onpointerdown = (e) => {
+        e.preventDefault();
+        t.setRangeText(w.slice(part.length), pos, pos, "end");
+        files[active] = t.value; sched(); updateBar();
+      };
+      sugBar.appendChild(b);
+    });
+  }
+  ["input", "keyup", "click"].forEach(ev => $("plainEditor").addEventListener(ev, updateBar));
+
+  const fi = document.createElement("input"); fi.type = "file"; fi.multiple = true; fi.hidden = true;
+  document.body.appendChild(fi);
+  fi.onchange = async () => {
+    let last = "";
+    for (const f of fi.files) {
+      if (f.size > 1e6) { alert(f.name + " is too large (max 1 MB)."); continue; }
+      let n = f.name; while (files[n] !== undefined) n = n.replace(/(\.[^.]*)?$/, "-copy$1");
+      files[n] = await f.text(); last = n;
+    }
+    fi.value = ""; renderFiles(); if (last) openFile(last);
+  };
+
+  const menu = $("settingsMenu");
+  const mkBtn = (fn, text) => { const b = document.createElement("button"); b.type = "button"; b.onclick = fn; if (text) b.textContent = text; menu.appendChild(b); return b; };
+  const bSug = mkBtn(() => { prefs.suggest = !prefs.suggest; applyPrefs(); });
+  const bWrap = mkBtn(() => { prefs.wrap = !prefs.wrap; applyPrefs(); });
+  mkBtn(() => { prefs.size = Math.min(26, prefs.size + 1); applyPrefs(); }, "Font size +");
+  mkBtn(() => { prefs.size = Math.max(10, prefs.size - 1); applyPrefs(); }, "Font size −");
+  mkBtn(() => {
+    if (!mReady) return alert("Format code is available in the desktop editor.");
+    const a = editor.getAction("editor.action.formatDocument"); if (a) a.run();
+  }, "Format code");
+  mkBtn(() => fi.click(), "Open file from device");
+  mkBtn(downloadCurrent, "Download file");
+  $("downloadBtn").classList.add("hidden");
+  $("runBtn").title = "Run (Ctrl+Enter)";
+  if (!document.querySelector('link[rel~="icon"]')) {
+    const ic = document.createElement("link"); ic.rel = "icon"; ic.href = "./static/zikim-logo.png"; document.head.appendChild(ic);
+  }
+  function applyPrefs() {
+    try { localStorage.setItem(PREF, JSON.stringify(prefs)); } catch {}
+    bSug.textContent = "Suggestions: " + (prefs.suggest ? "ON" : "OFF");
+    bWrap.textContent = "Word wrap: " + (prefs.wrap ? "ON" : "OFF");
+    $("plainEditor").style.fontSize = prefs.size + "px";
+    if (mReady) editor.updateOptions({fontSize: prefs.size, wordWrap: prefs.wrap ? "on" : "off",
+      quickSuggestions: prefs.suggest, suggestOnTriggerCharacters: prefs.suggest,
+      wordBasedSuggestions: prefs.suggest ? "currentDocument" : "off"});
+    updateBar();
+  }
+
+  /* plain JavaScript (console) runs in a hidden sandbox; websites keep using the Output tab */
+  const usedByPage = (n) => Object.keys(files).some(f => /^html?$/.test(ext(f)) &&
+    (files[f].includes('"' + n + '"') || files[f].includes("'" + n + "'")));
+  window.addEventListener("message", (e) => {
+    const d = e.data; if (d && d.__vszkb) term(d.text, d.err ? "err" : "");
+  });
+  function runJS(code) {
+    showPanel("term"); $("termOut").innerHTML = ""; rt = []; renderProblems();
+    const f = document.createElement("iframe"); f.sandbox = "allow-scripts"; f.hidden = true;
+    const boot = 'const __s=(t,e)=>parent.postMessage({__vszkb:1,text:t,err:e},"*");' +
+      'const __f=a=>a.map(x=>typeof x==="object"?JSON.stringify(x):String(x)).join(" ");' +
+      'console.log=(...a)=>__s(__f(a));console.error=(...a)=>__s(__f(a),1);console.warn=console.log;' +
+      'window.onerror=(m,u,l)=>{__s(m+" (line "+l+")",1)};';
+    f.srcdoc = "<script>" + boot + "<\/script><script>" + code.replace(/<\/script/gi, "<\\/script") + "<\/script>";
+    document.body.appendChild(f); setTimeout(() => f.remove(), 10000);
+  }
+
+  /* ---------- Ads (Google AdSense) ---------- */
   // Fill these two values after AdSense approves your site. Until then the "Ad space" placeholder stays.
   const ADS = {client: "", slot: ""};   // client: "ca-pub-XXXXXXXXXXXXXXXX", slot: "XXXXXXXXXX"
   if (ADS.client && ADS.slot) {
@@ -336,7 +456,7 @@
       '" data-ad-slot="' + ADS.slot + '" data-full-width-responsive="true"></ins>';
     try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch {}
   }
-  
+
   /* ---------- Start ---------- */
   renderFiles(); renderProblems();
   function fallback() {
@@ -344,7 +464,7 @@
     $("fallbackEditor").classList.remove("hidden");
     $("plainEditor").value = files[active] || "";
   }
-  if (window.require) {
+  if (window.require && !isPhone) {
     window.MonacoEnvironment = {
       getWorkerUrl: () => "data:text/javascript;charset=utf-8," + encodeURIComponent(
         `self.MonacoEnvironment={baseUrl:"${M}"};importScripts("${M}vs/base/worker/workerMain.js");`)
@@ -354,9 +474,13 @@
       mReady = true;
       setupPython();
       editor = monaco.editor.create($("editor"), {
-        value: files[active] || "", language: lang(active), theme: "vs-dark",
+        value: files[active] || "", language: lang(active), theme: prefs.light ? "vs" : "vs-dark",
         automaticLayout: true, minimap: {enabled: false}, fontFamily: "Fira Code, Consolas, monospace",
-        fontSize: 13, tabSize: 4, wordWrap: "on", scrollBeyondLastLine: false, padding: {top: 12}
+        fontSize: prefs.size, tabSize: 4, wordWrap: prefs.wrap ? "on" : "off", scrollBeyondLastLine: false, padding: {top: 12},
+        quickSuggestions: prefs.suggest, suggestOnTriggerCharacters: prefs.suggest,
+        wordBasedSuggestions: prefs.suggest ? "currentDocument" : "off",
+        bracketPairColorization: {enabled: true}, smoothScrolling: true, cursorSmoothCaretAnimation: "on",
+        formatOnPaste: true, guides: {indentation: true}, renderWhitespace: "selection"
       });
       editor.onDidChangeModelContent(() => { if (active) { files[active] = editor.getValue(); sched(); } });
       editor.onDidChangeCursorPosition(e => $("cursorStatus").textContent = `Ln ${e.position.lineNumber}, Col ${e.position.column}`);
@@ -366,5 +490,6 @@
       });
     }, fallback);
   } else fallback();
-  save();
+  if (prefs.light) { document.body.classList.add("light"); $("setTheme").textContent = "Switch to Dark Mode"; }
+  applyPrefs(); save();
 })();

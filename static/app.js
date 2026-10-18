@@ -322,6 +322,21 @@
     });
   }
 
+    /* ---------- Ads (Google AdSense) ---------- */
+  // Fill these two values after AdSense approves your site. Until then the "Ad space" placeholder stays.
+  const ADS = {client: "", slot: ""};   // client: "ca-pub-XXXXXXXXXXXXXXXX", slot: "XXXXXXXXXX"
+  if (ADS.client && ADS.slot) {
+    const sc = document.createElement("script");
+    sc.async = true; sc.crossOrigin = "anonymous";
+    sc.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=" + ADS.client;
+    document.head.appendChild(sc);
+    const box = document.querySelector(".ad-slot");
+    box.style.flexBasis = "90px";
+    box.innerHTML = '<ins class="adsbygoogle" style="display:block;width:100%;height:90px" data-ad-client="' + ADS.client +
+      '" data-ad-slot="' + ADS.slot + '" data-full-width-responsive="true"></ins>';
+    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch {}
+  }
+  
   /* ---------- Start ---------- */
   renderFiles(); renderProblems();
   function fallback() {

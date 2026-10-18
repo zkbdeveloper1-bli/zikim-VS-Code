@@ -358,7 +358,7 @@
   let prefs = {suggest: true, size: 13, wrap: true, light: false};
   try { prefs = {...prefs, ...JSON.parse(localStorage.getItem(PREF) || "{}")}; } catch {}
   const extraCss = document.createElement("style");
-  extraCss.textContent = ".fallback{flex-direction:column}#sugBar{display:flex;gap:6px;overflow-x:auto;padding:6px 8px;background:var(--panel);border-top:1px solid var(--line)}#sugBar button{flex:0 0 auto;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:6px 12px;font:13px Consolas,monospace}@media (max-width:760px){.topbar{padding:4px 8px}.panel{height:190px}.add-form input{width:110px}}";
+  extraCss.textContent = ".fallback{flex-direction:column}#sugBar{display:flex;gap:6px;overflow-x:auto;touch-action:pan-x;touch-action:pan-x;padding:6px 8px;background:var(--panel);border-top:1px solid var(--line)}#sugBar button{flex:0 0 auto;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:6px 12px;font:13px Consolas,monospace}@media (max-width:760px){.topbar{padding:4px 8px}.panel{height:190px}.add-form input{width:110px}}";
   document.head.appendChild(extraCss);
 
   const sugBar = document.createElement("div"); sugBar.id = "sugBar"; sugBar.className = "hidden";
@@ -375,15 +375,30 @@
     sugBar.classList.toggle("hidden", !hits.length);
     hits.forEach(w => {
       const b = document.createElement("button"); b.type = "button"; b.textContent = w;
-      b.onpointerdown = (e) => {
-        e.preventDefault();
-        t.setRangeText(w.slice(part.length), pos, pos, "end");
-        files[active] = t.value; sched(); updateBar();
+           b.onmousedown = (e) => e.preventDefault();
+      b.onclick = () => {
+        t.focus({preventScroll: true});
+        if (!document.execCommand("insertText", false, w.slice(part.length))) {
+          t.setRangeText(w.slice(part.length), pos, pos, "end");
+          files[active] = t.value; sched(); updateBar();
+        }
       };
       sugBar.appendChild(b);
     });
   }
-  ["input", "keyup", "click"].forEach(ev => $("plainEditor").addEventListener(ev, updateBar));
+  // Enter keeps the indentation of the previous line; after ":" (Python) or "{ ( [" it adds 4 spaces
+  $("plainEditor").addEventListener("beforeinput", (e) => {
+    if (e.inputType !== "insertLineBreak" && e.inputType !== "insertParagraph") return;
+    e.preventDefault();
+    const t = e.target, before = t.value.slice(0, t.selectionStart);
+    const line = before.slice(before.lastIndexOf("\n") + 1), trim = line.trimEnd();
+    let ind = (line.match(/^[ \t]*/) || [""])[0];
+    if (lang(active) === "python" ? trim.endsWith(":") : /[{(\[]$/.test(trim)) ind += "    ";
+    if (!document.execCommand("insertText", false, "\n" + ind)) {
+      t.setRangeText("\n" + ind, t.selectionStart, t.selectionEnd, "end");
+      files[active] = t.value; sched(); updateBar();
+    }
+  });
 
   const fi = document.createElement("input"); fi.type = "file"; fi.multiple = true; fi.hidden = true;
   document.body.appendChild(fi);

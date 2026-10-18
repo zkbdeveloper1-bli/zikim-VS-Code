@@ -46,8 +46,8 @@ button{font-family:inherit}
 .add-form input{width:160px}
 
 /* editor */
-.main{flex:1;min-height:0;display:flex;flex-direction:column}
-.editor{flex:1;min-height:80px}
+.app-shell>.main{flex:1;min-height:0;display:flex;flex-direction:column}
+.main>.editor{flex:1;min-height:80px}
 .fallback{flex:1;min-height:80px;display:flex}
 .fallback textarea{flex:1;background:var(--bg);color:var(--text);border:0;padding:14px;font:13px/1.55 Consolas,"Fira Code",monospace;resize:none;outline:none;tab-size:4}
 
@@ -59,12 +59,12 @@ button{font-family:inherit}
 .panel-tab:hover,.panel-actions button:hover{color:var(--text)}
 .panel-tab.active{color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)}
 .badge{background:var(--accent);color:#fff;border-radius:9px;padding:1px 7px;font-size:10px;margin-left:2px}
-.view{flex:1;min-height:0;overflow:auto;font:13px/1.55 Consolas,"Fira Code",monospace}
+.panel>.view{flex:1;min-height:0;overflow:auto;font:13px/1.55 Consolas,"Fira Code",monospace}
 #termView{display:flex;flex-direction:column;overflow:hidden}
 .term-out{flex:1;overflow:auto;padding:10px 14px;white-space:pre-wrap;word-break:break-word}
 .term-out .err{color:var(--err)}
 .term-out .dim{color:var(--muted)}
-.view>.dim{color:var(--muted);padding:10px 14px}
+.panel>.view>.dim{color:var(--muted);padding:10px 14px}
 .inline-line{display:flex;align-items:center;white-space:pre}
 .inline-input{flex:1;min-width:0;margin-left:6px;background:transparent;color:var(--text);border:0;outline:0;font:inherit;caret-color:var(--accent2)}
 .prob{padding:7px 14px;cursor:pointer;border-bottom:1px solid var(--line)}

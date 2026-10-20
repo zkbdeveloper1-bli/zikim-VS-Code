@@ -1,4 +1,4 @@
-# VS-ZKB Code Studio — Cloudflare Pages edition
+# Online Compiler — Cloudflare Pages edition
 
 This edition is adapted to deploy as a static site on Cloudflare Pages.
 

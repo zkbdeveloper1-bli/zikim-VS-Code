@@ -1,2 +1,6 @@
 start.bat
 .venv/
+__pycache__/
+*.pyc
+.vscode/
+node_modules/

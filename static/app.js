@@ -435,6 +435,7 @@
   const PREF = "vszkb-prefs-v1";
   let prefs = {suggest: true, size: 13, wrap: true, light: false};
   try { prefs = {...prefs, ...JSON.parse(localStorage.getItem(PREF) || "{}")}; } catch {}
+  if (prefs.fx === undefined) prefs.fx = !(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   const extraCss = document.createElement("style");
   extraCss.textContent = ".fallback{flex-direction:column}#sugBar{display:flex;gap:6px;overflow-x:auto;touch-action:pan-x;padding:6px 8px;background:var(--panel);border-top:1px solid var(--line)}#sugBar button{flex:0 0 auto;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:6px 12px;font:13px Consolas,monospace}#fileBtn{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media (max-width:760px){.topbar{padding:4px 8px}.panel{height:190px}.add-form input{width:110px}#fileBtn{max-width:110px}}";
   document.head.appendChild(extraCss);
@@ -512,6 +513,7 @@
   const mkBtn = (fn, text) => { const b = document.createElement("button"); b.type = "button"; b.onclick = fn; if (text) b.textContent = text; menu.appendChild(b); return b; };
   const bSug = mkBtn(() => { prefs.suggest = !prefs.suggest; applyPrefs(); });
   const bWrap = mkBtn(() => { prefs.wrap = !prefs.wrap; applyPrefs(); });
+  const bFx = mkBtn(() => { prefs.fx = !prefs.fx; applyPrefs(); });
   mkBtn(() => { prefs.size = Math.min(26, prefs.size + 1); applyPrefs(); }, "Font size +");
   mkBtn(() => { prefs.size = Math.max(10, prefs.size - 1); applyPrefs(); }, "Font size −");
   if (!isPhone) mkBtn(() => {
@@ -551,6 +553,8 @@
     try { localStorage.setItem(PREF, JSON.stringify(prefs)); } catch {}
     bSug.textContent = "Suggestions: " + (prefs.suggest ? "ON" : "OFF");
     bWrap.textContent = "Word wrap: " + (prefs.wrap ? "ON" : "OFF");
+    bFx.textContent = "Background animation: " + (prefs.fx ? "ON" : "OFF");
+    fxApply();
     $("plainEditor").style.fontSize = prefs.size + "px";
     if (mReady) editor.updateOptions({fontSize: prefs.size, wordWrap: prefs.wrap ? "on" : "off",
       quickSuggestions: prefs.suggest, suggestOnTriggerCharacters: prefs.suggest,
@@ -574,6 +578,59 @@
     f.srcdoc = "<script>" + boot + "<\/script><script>" + code.replace(/<\/script/gi, "<\\/script") + "<\/script>";
     document.body.appendChild(f); setTimeout(() => f.remove(), 10000);
   }
+
+  /* ---------- Background animation: small drifting stars (can be switched off in Settings) ---------- */
+  const cv = document.createElement("canvas");
+  cv.style.cssText = "position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;display:none";
+  document.body.prepend(cv);
+  const fxCss = document.createElement("style");
+  fxCss.textContent = ".app-shell{position:relative;z-index:1}" +
+    "body.fx .topbar,body.fx .explorer,body.fx .ad-slot{background:rgba(37,37,38,.78)}body.fx .panel{background:rgba(30,30,30,.7)}" +
+    "body.light.fx .topbar,body.light.fx .explorer,body.light.fx .ad-slot{background:rgba(243,243,243,.8)}body.light.fx .panel{background:rgba(255,255,255,.72)}";
+  document.head.appendChild(fxCss);
+  const ctx = cv.getContext("2d");
+  let stars = [], raf = 0, FW = 0, FH = 0, running = false;
+  function fxResize() {
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    FW = window.innerWidth; FH = window.innerHeight;
+    cv.width = FW * d; cv.height = FH * d; ctx.setTransform(d, 0, 0, d, 0, 0);
+    const n = Math.round(Math.min(70, (FW * FH) / 16000) * (isPhone ? 0.5 : 1));
+    stars = Array.from({length: n}, () => ({x: Math.random() * FW, y: Math.random() * FH, r: Math.random() * 1.4 + 0.4,
+      vx: (Math.random() - 0.5) * 0.25, vy: (Math.random() - 0.5) * 0.25, tw: Math.random() * 6.28}));
+  }
+  function fxFrame(t) {
+    if (!running) return;
+    ctx.clearRect(0, 0, FW, FH);
+    const col = document.body.classList.contains("light") ? "40,70,120" : "170,210,255";
+    for (const s of stars) {
+      s.x += s.vx; s.y += s.vy;
+      if (s.x < -5) s.x = FW + 5; else if (s.x > FW + 5) s.x = -5;
+      if (s.y < -5) s.y = FH + 5; else if (s.y > FH + 5) s.y = -5;
+      ctx.fillStyle = "rgba(" + col + "," + (0.35 + 0.35 * Math.sin(t / 900 + s.tw)) + ")";
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 6.2832); ctx.fill();
+    }
+    ctx.lineWidth = 0.6;
+    for (let i = 0; i < stars.length; i++) for (let j = i + 1; j < stars.length; j++) {
+      const dx = stars[i].x - stars[j].x, dy = stars[i].y - stars[j].y, d2 = dx * dx + dy * dy;
+      if (d2 < 12100) {   // closer than 110px: draw a faint line
+        ctx.strokeStyle = "rgba(" + col + "," + (0.14 * (1 - Math.sqrt(d2) / 110)) + ")";
+        ctx.beginPath(); ctx.moveTo(stars[i].x, stars[i].y); ctx.lineTo(stars[j].x, stars[j].y); ctx.stroke();
+      }
+    }
+    raf = requestAnimationFrame(fxFrame);
+  }
+  function fxApply() {
+    document.body.classList.toggle("fx", !!prefs.fx);
+    cv.style.display = prefs.fx ? "block" : "none";
+    if (prefs.fx && !running) { fxResize(); running = true; raf = requestAnimationFrame(fxFrame); }
+    if (!prefs.fx && running) { running = false; cancelAnimationFrame(raf); ctx.clearRect(0, 0, FW, FH); }
+  }
+  window.addEventListener("resize", () => { if (prefs.fx) fxResize(); });
+  document.addEventListener("visibilitychange", () => {   // pause when the tab is hidden (saves battery)
+    if (!prefs.fx) return;
+    if (document.hidden) { running = false; cancelAnimationFrame(raf); }
+    else if (!running) { running = true; raf = requestAnimationFrame(fxFrame); }
+  });
 
   /* ---------- Ads (Google AdSense) ---------- */
   // Fill these two values after AdSense approves your site. Until then the "Ad space" placeholder stays.

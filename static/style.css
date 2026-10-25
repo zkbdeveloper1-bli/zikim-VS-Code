@@ -91,3 +91,7 @@ button{font-family:inherit}
   .panel{height:190px}.panel.big{height:55vh}
   .ad-slot{flex-basis:44px}.statusbar{gap:12px;overflow-x:auto;white-space:nowrap}.statusbar span:nth-child(3){display:none}
 }
+
+.wordmark{font-size:17px;font-weight:700;letter-spacing:.3px;color:#fff}
+.wordmark .vip{color:#38a0ff;font-weight:800}
+body.light .wordmark{color:#0f172a}

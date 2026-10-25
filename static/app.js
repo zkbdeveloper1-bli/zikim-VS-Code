@@ -4,8 +4,8 @@
   const M = "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/";
   const LANG = {py:"python", html:"html", htm:"html", css:"css", js:"javascript", json:"json", md:"markdown", txt:"plaintext", c:"c", cpp:"cpp", java:"java"};
   const starter = {
-    "welcome.py": 'print("Hello from Online Compiler!")\n\nname = input("Your name: ")\nprint("Welcome,", name)\n',
-    "index.html": '<!doctype html>\n<html lang="en">\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n  <title>My Website</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <main class="card">\n    <h1>Hello, world! 👋</h1>\n    <p>My first website in Online Compiler.</p>\n    <button id="helloBtn">Click me</button>\n    <p id="message"></p>\n  </main>\n  <script src="script.js"></script>\n</body>\n</html>\n',
+    "welcome.py": 'print("Hello from VIP Compiler!")\n\nname = input("Your name: ")\nprint("Welcome,", name)\n',
+    "index.html": '<!doctype html>\n<html lang="en">\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n  <title>My Website</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <main class="card">\n    <h1>Hello, world! 👋</h1>\n    <p>My first website in VIP Compiler.</p>\n    <button id="helloBtn">Click me</button>\n    <p id="message"></p>\n  </main>\n  <script src="script.js"></script>\n</body>\n</html>\n',
     "style.css": 'body { font-family: Arial, sans-serif; background: #101827; color: #f8fafc; min-height: 100vh; display: grid; place-items: center; margin: 0; }\n.card { text-align: center; padding: 36px; border-radius: 18px; background: #1e293b; box-shadow: 0 20px 60px #0005; }\nbutton { background: #38bdf8; border: 0; border-radius: 8px; padding: 10px 18px; cursor: pointer; font-weight: bold; }\n',
     "script.js": 'document.getElementById("helloBtn").addEventListener("click", () => {\n  document.getElementById("message").textContent = "JavaScript is working!";\n  console.log("Button clicked!");\n});\nconsole.log("Website loaded successfully.");\n'
   };
@@ -427,7 +427,7 @@
   $("downloadBtn").classList.add("hidden");
   $("runBtn").title = "Run (Ctrl+Enter)";
   if (!document.querySelector('link[rel~="icon"]')) {
-    const ic = document.createElement("link"); ic.rel = "icon"; ic.href = "./static/zikim-logo.png"; document.head.appendChild(ic);
+    const ic = document.createElement("link"); ic.rel = "icon"; ic.href = "./static/vip-logo.png"; document.head.appendChild(ic);
   }
   function applyPrefs() {
     try { localStorage.setItem(PREF, JSON.stringify(prefs)); } catch {}

@@ -1,4 +1,4 @@
-# Online Compiler
+# VIP Compiler
 
 A browser-based coding-editor starter project with:
 - Monaco Editor (VS Code's editor component) loaded from a CDN

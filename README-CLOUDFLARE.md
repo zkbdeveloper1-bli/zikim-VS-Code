@@ -1,4 +1,4 @@
-# Online Compiler — Cloudflare Pages edition
+# VIP Compiler — Cloudflare Pages edition
 
 This edition is adapted to deploy as a static site on Cloudflare Pages.
 

@@ -585,8 +585,8 @@
   document.body.prepend(cv);
   const fxCss = document.createElement("style");
   fxCss.textContent = ".app-shell{position:relative;z-index:1}" +
-    "body.fx .topbar,body.fx .explorer,body.fx .ad-slot{background:rgba(37,37,38,.35)}body.fx .panel{background:rgba(30,30,30,.3)}" +
-    "body.light.fx .topbar,body.light.fx .explorer,body.light.fx .ad-slot{background:rgba(243,243,243,.4)}body.light.fx .panel{background:rgba(255,255,255,.35)}";
+    "body.fx .topbar,body.fx .explorer,body.fx .ad-slot{background:rgba(37,37,38,.62)}body.fx .panel{background:rgba(30,30,30,.55)}" +
+    "body.light.fx .topbar,body.light.fx .explorer,body.light.fx .ad-slot{background:rgba(243,243,243,.66)}body.light.fx .panel{background:rgba(255,255,255,.58)}";
   document.head.appendChild(fxCss);
   const ctx = cv.getContext("2d");
   let stars = [], raf = 0, FW = 0, FH = 0, running = false;
@@ -594,38 +594,31 @@
     const d = Math.min(window.devicePixelRatio || 1, 2);
     FW = window.innerWidth; FH = window.innerHeight;
     cv.width = FW * d; cv.height = FH * d; ctx.setTransform(d, 0, 0, d, 0, 0);
-    const n = Math.round(Math.min(110, (FW * FH) / 12000) * (isPhone ? 0.55 : 1));
+    const n = Math.round(Math.min(70, (FW * FH) / 16000) * (isPhone ? 0.5 : 1));
     stars = Array.from({length: n}, () => {
-      const a = Math.random() * 6.28, sp = 0.35 + Math.random() * 0.6;
-      return {x: Math.random() * FW, y: Math.random() * FH, r: Math.random() * 1.8 + 1.1,
-        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, tw: Math.random() * 6.28, c: Math.floor(Math.random() * 3)};
+      const a = Math.random() * 6.28, sp = 0.15 + Math.random() * 0.3;
+      return {x: Math.random() * FW, y: Math.random() * FH, r: Math.random() * 1.2 + 0.5,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, tw: Math.random() * 6.28};
     });
   }
   function fxFrame(t) {
     if (!running) return;
     ctx.clearRect(0, 0, FW, FH);
-    const pal = document.body.classList.contains("light") ? ["30,90,210", "120,60,210", "10,130,150"] : ["110,200,255", "190,150,255", "255,255,255"];
+    const col = document.body.classList.contains("light") ? "40,70,120" : "170,210,255";
     for (const s of stars) {
       s.x += s.vx; s.y += s.vy;
-      if (s.x < -10) s.x = FW + 10; else if (s.x > FW + 10) s.x = -10;
-      if (s.y < -10) s.y = FH + 10; else if (s.y > FH + 10) s.y = -10;
+      if (s.x < -5) s.x = FW + 5; else if (s.x > FW + 5) s.x = -5;
+      if (s.y < -5) s.y = FH + 5; else if (s.y > FH + 5) s.y = -5;
+      ctx.fillStyle = "rgba(" + col + "," + (0.5 + 0.25 * Math.sin(t / 900 + s.tw)) + ")";
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 6.2832); ctx.fill();
     }
-    ctx.lineWidth = 0.9;
+    ctx.lineWidth = 0.6;
     for (let i = 0; i < stars.length; i++) for (let j = i + 1; j < stars.length; j++) {
       const dx = stars[i].x - stars[j].x, dy = stars[i].y - stars[j].y, d2 = dx * dx + dy * dy;
-      if (d2 < 16900) {
-        ctx.strokeStyle = "rgba(" + pal[0] + "," + (0.3 * (1 - Math.sqrt(d2) / 130)) + ")";
+      if (d2 < 12100) {
+        ctx.strokeStyle = "rgba(" + col + "," + (0.18 * (1 - Math.sqrt(d2) / 110)) + ")";
         ctx.beginPath(); ctx.moveTo(stars[i].x, stars[i].y); ctx.lineTo(stars[j].x, stars[j].y); ctx.stroke();
       }
-    }
-    for (const s of stars) {
-      const tw = 0.5 + 0.5 * Math.sin(t / 700 + s.tw), col = pal[s.c];
-      const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 4);
-      g.addColorStop(0, "rgba(" + col + "," + (0.5 + 0.3 * tw) + ")");
-      g.addColorStop(1, "rgba(" + col + ",0)");
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 4, 0, 6.2832); ctx.fill();
-      ctx.fillStyle = "rgba(" + col + "," + (0.75 + 0.25 * tw) + ")";
-      ctx.beginPath(); ctx.arc(s.x, s.y, s.r * (0.8 + 0.3 * tw), 0, 6.2832); ctx.fill();
     }
     raf = requestAnimationFrame(fxFrame);
   }

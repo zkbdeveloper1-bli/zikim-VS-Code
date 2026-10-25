@@ -55,6 +55,7 @@
       c.append(l, x); t.appendChild(c);
     });
     $("langStatus").textContent = lang(active);
+    updateFileBtn();
   }
   function openFile(n) {
     if (files[n] === undefined) return;
@@ -182,6 +183,34 @@
     } catch {}
   }
 
+  /* ---------- Files for Python: open("name.txt") works with project files ---------- */
+  function syncToPython(py) {
+    const snap = {};
+    try {
+      for (const n of py.FS.readdir(".")) {
+        if (n === "." || n === "..") continue;
+        if (!py.FS.isDir(py.FS.stat(n).mode)) py.FS.unlink(n);
+      }
+    } catch {}
+    for (const [n, c] of Object.entries(files)) { try { py.FS.writeFile(n, c); snap[n] = c; } catch {} }
+    return snap;
+  }
+  function syncFromPython(py, snap) {
+    let changed = false;
+    try {
+      for (const n of py.FS.readdir(".")) {
+        if (n === "." || n === "..") continue;
+        const st = py.FS.stat(n);
+        if (py.FS.isDir(st.mode) || st.size > 1e6) continue;
+        let c; try { c = py.FS.readFile(n, {encoding: "utf8"}); } catch { continue; }
+        if (c.includes("\u0000") || c.includes("\uFFFD") || snap[n] === c) continue;
+        term((snap[n] === undefined ? "New file added: " : "File updated: ") + n, "dim");
+        files[n] = c; changed = true;
+      }
+    } catch {}
+    if (changed) { renderFiles(); if (files[active] !== getCode()) setCode(files[active]); save(); }
+  }
+
   /* ---------- Run ---------- */
   async function runPython(code) {
     showPanel("term");
@@ -216,6 +245,7 @@
       py.setStderr({batched: (t) => term(t, "err")});
       py.runPython('import os, warnings\nos.environ["MPLBACKEND"] = "AGG"\nwarnings.filterwarnings("ignore")');
       py.globals.set("__vszkb_input", readInput);
+      const snap = syncToPython(py);
       await py.loadPackagesFromImports(code);
       try {
         await py.runPythonAsync(code.replace(/\binput\s*\(/g, "await __vszkb_input("));
@@ -228,6 +258,7 @@
       } finally {
         py.globals.delete("__vszkb_input");
       }
+      syncFromPython(py, snap);
       term("— finished in " + ((performance.now() - t0) / 1000).toFixed(2) + "s —", "dim");
       if (/matplotlib/.test(code)) await showFigures(py);
     } catch (err) {
@@ -236,11 +267,57 @@
       btn.disabled = false; btn.innerHTML = "<span>▶</span> Run";
     }
   }
+  /* ---------- When a program says open("data.txt") and the file is not in the project, ask the user to choose it ---------- */
+  function neededFiles(code) {
+    const out = new Set(), re = /\b(?:open|read_csv|read_json|loadtxt)\(\s*(["'])([^"'\\\n]+)\1\s*(?:,\s*(["'])([^"'\n]*)\3)?/g;
+    let m;
+    while ((m = re.exec(code))) {
+      const n = m[2];
+      if (/[\/\\]|:\/\//.test(n) || (m[4] && /[wax]/.test(m[4]))) continue;   // folders, URLs and write modes are skipped
+      out.add(n);
+    }
+    return [...out];
+  }
+  function askForFiles(names) {
+    return new Promise((resolve) => {
+      const ov = document.createElement("div");
+      ov.style.cssText = "position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.6)";
+      const box = document.createElement("div");
+      box.style.cssText = "max-width:440px;width:100%;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 18px 60px #000a";
+      box.innerHTML = '<h3 style="margin:0 0 8px">Your program wants to read a file</h3>' +
+        '<p style="margin:0 0 8px;color:var(--muted);line-height:1.5">A website cannot open files on your phone or computer by itself. Please choose the file below. It stays on your device and is only used inside this page.</p>';
+      const ul = document.createElement("ul");
+      ul.style.cssText = "margin:8px 0 14px;padding-left:20px;font-family:Consolas,monospace";
+      names.forEach(n => { const li = document.createElement("li"); li.textContent = n; ul.appendChild(li); });
+      const row = document.createElement("div"); row.style.cssText = "display:flex;gap:8px;flex-wrap:wrap";
+      const mk = (t, cls, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = cls; b.textContent = t; b.onclick = fn; row.appendChild(b); };
+      const inp = document.createElement("input"); inp.type = "file"; inp.multiple = names.length > 1; inp.hidden = true;
+      inp.onchange = async () => {
+        const picked = [...inp.files];
+        for (const f of picked) {
+          if (f.size > 1e6) { alert(f.name + " is too large (max 1 MB)."); continue; }
+          let n = f.name;
+          if (names.length === 1 && picked.length === 1) n = names[0];
+          else if (!names.includes(n)) { const hit = names.find(x => x.toLowerCase() === n.toLowerCase()); if (hit) n = hit; }
+          files[n] = await f.text();
+        }
+        renderFiles(); save(); ov.remove(); resolve(true);
+      };
+      mk("Choose file" + (names.length > 1 ? "s" : ""), "btn primary", () => inp.click());
+      mk("Run anyway", "btn", () => { ov.remove(); resolve(true); });
+      mk("Cancel", "btn", () => { ov.remove(); resolve(false); });
+      box.append(ul, row, inp); ov.appendChild(box); document.body.appendChild(ov);
+    });
+  }
   function runCode() {
     if (!active) return;
     files[active] = getCode(); sched();
     const l = lang(active);
-    if (l === "python") runPython(files[active]);
+    if (l === "python") {
+      const miss = neededFiles(files[active]).filter(n => files[n] === undefined);
+      if (miss.length) askForFiles(miss).then(ok => { if (ok) runPython(files[active]); });
+      else runPython(files[active]);
+    }
     else if (l === "javascript" && !usedByPage(active)) runJS(files[active]);
     else if (["html", "css", "javascript"].includes(l)) openOutput(buildPreview());
     else {
@@ -255,6 +332,7 @@
     const url = URL.createObjectURL(new Blob([files[active]], {type: "text/plain;charset=utf-8"}));
     const a = document.createElement("a"); a.href = url; a.download = active; a.click();
     URL.revokeObjectURL(url);
+    toast("Downloaded " + active);
   }
   $("downloadBtn").onclick = downloadCurrent;
 
@@ -358,7 +436,7 @@
   let prefs = {suggest: true, size: 13, wrap: true, light: false};
   try { prefs = {...prefs, ...JSON.parse(localStorage.getItem(PREF) || "{}")}; } catch {}
   const extraCss = document.createElement("style");
-  extraCss.textContent = ".fallback{flex-direction:column}#sugBar{display:flex;gap:6px;overflow-x:auto;touch-action:pan-x;touch-action:pan-x;padding:6px 8px;background:var(--panel);border-top:1px solid var(--line)}#sugBar button{flex:0 0 auto;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:6px 12px;font:13px Consolas,monospace}@media (max-width:760px){.topbar{padding:4px 8px}.panel{height:190px}.add-form input{width:110px}}";
+  extraCss.textContent = ".fallback{flex-direction:column}#sugBar{display:flex;gap:6px;overflow-x:auto;touch-action:pan-x;padding:6px 8px;background:var(--panel);border-top:1px solid var(--line)}#sugBar button{flex:0 0 auto;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:6px 12px;font:13px Consolas,monospace}#fileBtn{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media (max-width:760px){.topbar{padding:4px 8px}.panel{height:190px}.add-form input{width:110px}#fileBtn{max-width:110px}}";
   document.head.appendChild(extraCss);
 
   const sugBar = document.createElement("div"); sugBar.id = "sugBar"; sugBar.className = "hidden";
@@ -375,7 +453,7 @@
     sugBar.classList.toggle("hidden", !hits.length);
     hits.forEach(w => {
       const b = document.createElement("button"); b.type = "button"; b.textContent = w;
-           b.onmousedown = (e) => e.preventDefault();
+      b.onmousedown = (e) => e.preventDefault();
       b.onclick = () => {
         t.focus({preventScroll: true});
         if (!document.execCommand("insertText", false, w.slice(part.length))) {
@@ -386,6 +464,7 @@
       sugBar.appendChild(b);
     });
   }
+  ["input", "keyup", "click"].forEach(ev => $("plainEditor").addEventListener(ev, updateBar));
   // Enter keeps the indentation of the previous line; after ":" (Python) or "{ ( [" it adds 4 spaces
   $("plainEditor").addEventListener("beforeinput", (e) => {
     if (e.inputType !== "insertLineBreak" && e.inputType !== "insertParagraph") return;
@@ -402,15 +481,32 @@
 
   const fi = document.createElement("input"); fi.type = "file"; fi.multiple = true; fi.hidden = true;
   document.body.appendChild(fi);
-  fi.onchange = async () => {
-    let last = "";
-    for (const f of fi.files) {
+  async function importFiles(list) {
+    let last = "", count = 0;
+    for (const f of list) {
       if (f.size > 1e6) { alert(f.name + " is too large (max 1 MB)."); continue; }
       let n = f.name; while (files[n] !== undefined) n = n.replace(/(\.[^.]*)?$/, "-copy$1");
-      files[n] = await f.text(); last = n;
+      files[n] = await f.text(); last = n; count++;
     }
-    fi.value = ""; renderFiles(); if (last) openFile(last);
-  };
+    renderFiles(); if (last) { openFile(last); toast(count > 1 ? count + " files added" : "Added " + last); }
+  }
+  fi.onchange = async () => { await importFiles([...fi.files]); fi.value = ""; };
+  // drag files from your computer and drop them anywhere on the page
+  ["dragover", "drop"].forEach(ev => window.addEventListener(ev, (e) => {
+    if (!e.dataTransfer || ![...e.dataTransfer.types].includes("Files")) return;
+    e.preventDefault(); e.stopPropagation();
+    if (ev === "drop") importFiles([...e.dataTransfer.files]);
+  }, true));
+  function toast(msg) {
+    let t = document.getElementById("toast");
+    if (!t) {
+      t = document.createElement("div"); t.id = "toast";
+      t.style.cssText = "position:fixed;left:50%;bottom:70px;transform:translateX(-50%);z-index:9998;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 16px;font-size:13px;box-shadow:0 8px 24px #0008;transition:opacity .2s";
+      document.body.appendChild(t);
+    }
+    t.textContent = msg; t.style.opacity = "1";
+    clearTimeout(t._h); t._h = setTimeout(() => { t.style.opacity = "0"; }, 2200);
+  }
 
   const menu = $("settingsMenu");
   const mkBtn = (fn, text) => { const b = document.createElement("button"); b.type = "button"; b.onclick = fn; if (text) b.textContent = text; menu.appendChild(b); return b; };
@@ -418,12 +514,34 @@
   const bWrap = mkBtn(() => { prefs.wrap = !prefs.wrap; applyPrefs(); });
   mkBtn(() => { prefs.size = Math.min(26, prefs.size + 1); applyPrefs(); }, "Font size +");
   mkBtn(() => { prefs.size = Math.max(10, prefs.size - 1); applyPrefs(); }, "Font size −");
-  mkBtn(() => {
-    if (!mReady) return alert("Format code is available in the desktop editor.");
-    const a = editor.getAction("editor.action.formatDocument"); if (a) a.run();
+  if (!isPhone) mkBtn(() => {
+    const a = editor && editor.getAction("editor.action.formatDocument"); if (a) a.run();
   }, "Format code");
-  mkBtn(() => fi.click(), "Open file from device");
-  mkBtn(downloadCurrent, "Download file");
+  // "File" button next to Settings: shows the current file's name, opens a small menu
+  const fileBtn = document.createElement("button");
+  fileBtn.type = "button"; fileBtn.id = "fileBtn"; fileBtn.className = "btn";
+  $("settingsBtn").parentNode.insertBefore(fileBtn, $("settingsBtn"));
+  const fileMenu = document.createElement("div");
+  fileMenu.className = "settings-menu hidden"; fileMenu.innerHTML = '<div class="settings-title">FILES</div>';
+  $("settingsMenu").parentNode.appendChild(fileMenu);
+  const fileItem = (text, fn) => {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = text;
+    b.onclick = () => { fileMenu.classList.add("hidden"); fn(); };
+    fileMenu.appendChild(b);
+  };
+  fileItem("⬆  Open file from device", () => fi.click());
+  fileItem("⬇  Download file", downloadCurrent);
+  fileBtn.onclick = () => {
+    $("settingsMenu").classList.add("hidden");
+    const open = fileMenu.classList.contains("hidden");
+    if (open) fileMenu.style.right = Math.max(8, window.innerWidth - fileBtn.getBoundingClientRect().right) + "px";
+    fileMenu.classList.toggle("hidden", !open);
+  };
+  $("settingsBtn").addEventListener("click", () => fileMenu.classList.add("hidden"));
+  document.addEventListener("click", (e) => {
+    if (!fileMenu.contains(e.target) && !fileBtn.contains(e.target)) fileMenu.classList.add("hidden");
+  });
+  function updateFileBtn() { fileBtn.textContent = "📁 Files ▾"; fileBtn.title = "Open a file from your device, or download the current one"; }
   $("downloadBtn").classList.add("hidden");
   $("runBtn").title = "Run (Ctrl+Enter)";
   if (!document.querySelector('link[rel~="icon"]')) {

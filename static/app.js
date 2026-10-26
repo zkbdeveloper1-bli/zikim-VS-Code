@@ -252,6 +252,7 @@
       } catch (err) {
         const m = String(err).trim();
         term(m, "err");
+        if (window.VIP && window.VIP.onError) window.VIP.onError(m);
         const ln = [...m.matchAll(/line (\d+)/g)].pop();
         rt.push({sev: 8, line: ln ? +ln[1] : 1, msg: m.split("\n").pop(), file: active});
         renderProblems();
@@ -684,5 +685,16 @@
     }, fallback);
   } else fallback();
   if (prefs.light) { document.body.classList.add("light"); $("setTheme").textContent = "Switch to Dark Mode"; }
+  window.VIP = {
+    get files() { return files; }, get active() { return active; },
+    getCode, openFile, runCode, downloadCurrent, toggleTheme, toggleExplorer, togglePanel, toast,
+    openFromDevice: () => fi.click(),
+    addFile(name, text) {
+      let n = String(name).replace(/[\/\\]/g, "_");
+      while (files[n] !== undefined) n = n.replace(/(\.[^.]*)?$/, "-copy$1");
+      files[n] = text; renderFiles(); openFile(n); save(); return n;
+    },
+    onError: null
+  };
   applyPrefs(); save();
 })();
